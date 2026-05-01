@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SauveParent - Conteur vocal</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="parent-panel" aria-labelledby="parent-title">
+        <div>
+          <p class="eyebrow">SauveParent MVP</p>
+          <h1 id="parent-title">Compagnon vocal d'histoires</h1>
+          <p class="intro">
+            Configurez le cadre. L'enfant discute ensuite avec l'agent pour créer
+            son scénario, sans écran nécessaire.
+          </p>
+        </div>
+
+        <form id="parent-form" class="settings-form">
+          <label>
+            Prénom de l'enfant
+            <input id="child-name" type="text" maxlength="24" placeholder="Optionnel" />
+          </label>
+
+          <label>
+            Âge réel
+            <input id="parent-age" type="number" min="4" max="8" value="6" required />
+          </label>
+
+          <label>
+            Durée
+            <select id="story-duration">
+              <option value="5">5 minutes</option>
+              <option value="10" selected>10 minutes</option>
+              <option value="15">15 minutes</option>
+            </select>
+          </label>
+
+          <label>
+            Voix
+            <select id="voice-style">
+              <option value="soft">Douce</option>
+              <option value="funny">Rigolote</option>
+            </select>
+          </label>
+
+          <fieldset>
+            <legend>Thèmes autorisés</legend>
+            <label><input type="checkbox" name="theme" value="émotions" checked /> Émotions</label>
+            <label><input type="checkbox" name="theme" value="amitié" checked /> Amitié</label>
+            <label><input type="checkbox" name="theme" value="partage" checked /> Partage</label>
+            <label><input type="checkbox" name="theme" value="écologie" /> Écologie</label>
+            <label><input type="checkbox" name="theme" value="sommeil" checked /> Sommeil</label>
+          </fieldset>
+
+          <fieldset>
+            <legend>Apprentissages légers</legend>
+            <label><input type="checkbox" name="lesson" value="politesse" checked /> Politesse</label>
+            <label><input type="checkbox" name="lesson" value="pardon" checked /> Pardon</label>
+            <label><input type="checkbox" name="lesson" value="patience" checked /> Patience</label>
+            <label><input type="checkbox" name="lesson" value="autonomie" /> Autonomie</label>
+          </fieldset>
+
+          <label>
+            Sujets interdits
+            <textarea id="blocked-topics" rows="3" placeholder="Ex : monstres réalistes, violence, séparation..."></textarea>
+          </label>
+
+          <button type="submit" class="primary-action">Démarrer la session enfant</button>
+        </form>
+      </section>
+
+      <section class="child-panel" aria-labelledby="child-title">
+        <div class="session-header">
+          <div>
+            <p class="eyebrow">Mode enfant</p>
+            <h2 id="child-title">Agent babysitter</h2>
+          </div>
+          <span id="session-status" class="status">En attente</span>
+        </div>
+
+        <div class="agent-face" aria-hidden="true">
+          <span class="face-eye"></span>
+          <span class="face-mouth"></span>
+          <span class="face-eye"></span>
+        </div>
+
+        <p id="agent-line" class="agent-line">
+          Le parent configure d'abord le cadre de l'histoire.
+        </p>
+
+        <div class="voice-controls">
+          <button id="listen-button" type="button" disabled>Répondre / interrompre</button>
+          <button id="story-button" type="button" disabled>Lancer l'histoire</button>
+          <button id="stop-button" type="button" disabled>Stop parent</button>
+        </div>
+
+        <label class="manual-input">
+          Réponse enfant si micro indisponible
+          <input id="child-answer" type="text" placeholder="Ex : j'ai 42 ans et je veux un dragon gentil" />
+        </label>
+
+        <div class="summary-panel">
+          <h3>Résumé parent</h3>
+          <dl>
+            <div><dt>Scénario</dt><dd id="summary-scenario">Non démarré</dd></div>
+            <div><dt>Thèmes</dt><dd id="summary-themes">-</dd></div>
+            <div><dt>Alertes</dt><dd id="summary-alerts">Aucune</dd></div>
+          </dl>
+        </div>
+      </section>
+    </main>
+
+    <script src="./app.js"></script>
+  </body>
+</html>
