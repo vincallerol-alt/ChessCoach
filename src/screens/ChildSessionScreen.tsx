@@ -9,8 +9,10 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 
+import { colors, radius, shadow } from "../design/theme";
 import { checkChildInputSafety, sanitizeChildInput } from "../domain/safety";
 import {
   buildAgeReply,
@@ -61,8 +63,7 @@ export function ChildSessionScreen({ title, config, onBackToParent }: ChildSessi
 
     const safety = checkChildInputSafety(cleanInput, config);
     if (!safety.safe) {
-      const nextAlerts = [...alerts, `Demande transformee : ${safety.reason}`];
-      setAlerts(nextAlerts);
+      setAlerts((current) => [...current, `Demande transformee : ${safety.reason}`]);
       say(safety.childFriendlyReply || "On transforme cette idee en version plus douce.");
       setInput("");
       return;
@@ -116,72 +117,94 @@ export function ChildSessionScreen({ title, config, onBackToParent }: ChildSessi
 
   return (
     <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.container}>
-      <ScrollView contentContainerStyle={styles.content}>
-        <View style={styles.header}>
-          <View>
-            <Text style={styles.eyebrow}>{title}</Text>
-            <Text style={styles.title}>Agent babysitter</Text>
-          </View>
-          <Pressable accessibilityLabel="Retour parent" style={styles.iconButton} onPress={onBackToParent}>
-            <Ionicons name="settings-outline" size={22} color="#176B5B" />
-          </Pressable>
-        </View>
-
-        <View style={styles.face} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-          <View style={styles.eye} />
-          <View style={styles.mouth} />
-          <View style={styles.eye} />
-        </View>
-
-        <View style={styles.agentBubble}>
-          <Text style={styles.agentLine}>{agentLine}</Text>
-        </View>
-
-        <View style={styles.controls}>
-          <Pressable style={[styles.button, styles.listenButton]} onPress={interrupt}>
-            <Ionicons name="mic-outline" size={18} color="#2B2417" />
-            <Text style={styles.listenText}>{phase === "intro" ? "Commencer" : "Interrompre"}</Text>
-          </Pressable>
-
-          <Pressable
-            style={[styles.button, styles.storyButton, phase !== "ready" && styles.disabled]}
-            disabled={phase !== "ready"}
-            onPress={startStory}
-          >
-            <Ionicons name="book-outline" size={18} color="#FFFFFF" />
-            <Text style={styles.storyText}>Lancer l'histoire</Text>
-          </Pressable>
-
-          <Pressable style={[styles.button, styles.stopButton]} onPress={stopSession}>
-            <Ionicons name="stop-circle-outline" size={18} color="#FFFFFF" />
-            <Text style={styles.stopText}>Stop parent</Text>
-          </Pressable>
-        </View>
-
-        <View style={styles.field}>
-          <Text style={styles.label}>Reponse enfant, en attendant le micro temps reel</Text>
-          <View style={styles.inputRow}>
-            <TextInput
-              value={input}
-              onChangeText={setInput}
-              placeholder="Ex : j'ai 42 ans et je veux un dragon gentil"
-              style={styles.input}
-              onSubmitEditing={submitChildInput}
-              returnKeyType="send"
-            />
-            <Pressable style={styles.sendButton} onPress={submitChildInput}>
-              <Ionicons name="send" size={18} color="#FFFFFF" />
+      <LinearGradient colors={["#E9F3EF", "#DCEBFF", "#FFF7EA"]} style={styles.backdrop}>
+        <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+          <View style={styles.header}>
+            <View>
+              <Text style={styles.eyebrow}>{title}</Text>
+              <Text style={styles.title}>Pret pour l'histoire</Text>
+            </View>
+            <Pressable accessibilityLabel="Retour parent" style={styles.iconButton} onPress={onBackToParent}>
+              <Ionicons name="settings-outline" size={22} color={colors.green} />
             </Pressable>
           </View>
-        </View>
 
-        <View style={styles.summary}>
-          <Text style={styles.summaryTitle}>Resume parent</Text>
-          <SummaryLine label="Scenario" value={summary.scenario} />
-          <SummaryLine label="Themes" value={summary.themes.join(", ") || "-"} />
-          <SummaryLine label="Alertes" value={summary.alerts.length > 0 ? summary.alerts.join(" | ") : "Aucune"} />
-        </View>
-      </ScrollView>
+          <View style={styles.stage}>
+            <View style={styles.statusPill}>
+              <View style={[styles.statusDot, phase === "story" && styles.statusDotLive]} />
+              <Text style={styles.statusText}>{statusLabel(phase)}</Text>
+            </View>
+
+            <View style={styles.orbit}>
+              <View style={styles.face} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+                <View style={styles.eye} />
+                <View style={styles.mouth} />
+                <View style={styles.eye} />
+              </View>
+            </View>
+
+            <View style={styles.agentBubble}>
+              <Text style={styles.agentLine}>{agentLine}</Text>
+            </View>
+          </View>
+
+          <View style={styles.primaryControls}>
+            <Pressable style={({ pressed }) => [styles.micButton, pressed && styles.pressed]} onPress={interrupt}>
+              <Ionicons name={phase === "intro" ? "play" : "mic"} size={24} color={colors.greenDark} />
+              <Text style={styles.micText}>{phase === "intro" ? "Commencer" : "Interrompre"}</Text>
+            </Pressable>
+
+            <Pressable
+              style={({ pressed }) => [
+                styles.storyButton,
+                phase !== "ready" && styles.disabled,
+                pressed && phase === "ready" && styles.pressed,
+              ]}
+              disabled={phase !== "ready"}
+              onPress={startStory}
+            >
+              <Ionicons name="book-outline" size={19} color={colors.surface} />
+              <Text style={styles.storyText}>Lancer l'histoire</Text>
+            </Pressable>
+          </View>
+
+          <View style={styles.fallbackPanel}>
+            <View style={styles.fallbackHeader}>
+              <Ionicons name="chatbubble-ellipses-outline" size={18} color={colors.green} />
+              <Text style={styles.fallbackTitle}>Saisie temporaire MVP</Text>
+            </View>
+            <View style={styles.inputRow}>
+              <TextInput
+                value={input}
+                onChangeText={setInput}
+                placeholder="Ex : j'ai 42 ans et je veux un dragon gentil"
+                placeholderTextColor="#8A958F"
+                style={styles.input}
+                onSubmitEditing={submitChildInput}
+                returnKeyType="send"
+              />
+              <Pressable style={styles.sendButton} onPress={submitChildInput}>
+                <Ionicons name="send" size={18} color={colors.surface} />
+              </Pressable>
+            </View>
+          </View>
+
+          <View style={styles.parentBar}>
+            <Pressable style={({ pressed }) => [styles.stopButton, pressed && styles.pressed]} onPress={stopSession}>
+              <Ionicons name="stop-circle-outline" size={18} color={colors.surface} />
+              <Text style={styles.stopText}>Stop parent</Text>
+            </Pressable>
+            <Text style={styles.parentHint}>Resume visible uniquement cote parent.</Text>
+          </View>
+
+          <View style={styles.summary}>
+            <Text style={styles.summaryTitle}>Resume parent</Text>
+            <SummaryLine label="Scenario" value={summary.scenario} />
+            <SummaryLine label="Themes" value={summary.themes.join(", ") || "-"} />
+            <SummaryLine label="Alertes" value={summary.alerts.length > 0 ? summary.alerts.join(" | ") : "Aucune"} />
+          </View>
+        </ScrollView>
+      </LinearGradient>
     </KeyboardAvoidingView>
   );
 }
@@ -195,15 +218,27 @@ function SummaryLine({ label, value }: { label: string; value: string }) {
   );
 }
 
+function statusLabel(phase: SessionPhase) {
+  if (phase === "intro") return "En attente";
+  if (phase === "questioning") return "Discussion";
+  if (phase === "ready") return "Scenario pret";
+  if (phase === "story") return "Histoire en cours";
+  return "Pause parent";
+}
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#E9F3EF",
+    backgroundColor: colors.child,
+  },
+  backdrop: {
+    flex: 1,
   },
   content: {
     alignItems: "center",
-    gap: 22,
-    padding: 24,
+    gap: 16,
+    padding: 18,
+    paddingBottom: 28,
   },
   header: {
     width: "100%",
@@ -212,114 +247,166 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
   eyebrow: {
-    color: "#63746D",
+    color: colors.muted,
     fontSize: 12,
     fontWeight: "800",
     textTransform: "uppercase",
     letterSpacing: 1,
   },
   title: {
-    color: "#17211D",
-    fontSize: 32,
+    color: colors.ink,
+    fontSize: 31,
+    lineHeight: 35,
     fontWeight: "900",
   },
   iconButton: {
-    width: 44,
-    height: 44,
+    width: 46,
+    height: 46,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 8,
-    backgroundColor: "#FFFFFF",
+    borderRadius: radius.md,
+    backgroundColor: "rgba(255,255,255,0.78)",
+  },
+  stage: {
+    width: "100%",
+    alignItems: "center",
+    gap: 16,
+    borderRadius: radius.lg,
+    padding: 18,
+    backgroundColor: "rgba(255,255,255,0.58)",
+    ...shadow,
+  },
+  statusPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    borderRadius: radius.sm,
+    paddingHorizontal: 11,
+    paddingVertical: 8,
+    backgroundColor: colors.surface,
+  },
+  statusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.gold,
+  },
+  statusDotLive: {
+    backgroundColor: colors.coral,
+  },
+  statusText: {
+    color: colors.greenDark,
+    fontSize: 12,
+    fontWeight: "900",
+  },
+  orbit: {
+    width: 246,
+    height: 246,
+    borderRadius: 123,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "rgba(23,107,91,0.18)",
+    backgroundColor: "rgba(255,255,255,0.36)",
   },
   face: {
-    width: 230,
-    height: 230,
-    borderRadius: 115,
-    backgroundColor: "#FFD166",
+    width: 204,
+    height: 204,
+    borderRadius: 102,
+    backgroundColor: colors.gold,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 24,
-    shadowColor: "#17211D",
-    shadowOpacity: 0.12,
-    shadowRadius: 28,
-    shadowOffset: { width: 0, height: 14 },
-    elevation: 4,
+    gap: 22,
+    ...shadow,
   },
   eye: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: "#17211D",
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: colors.ink,
   },
   mouth: {
-    width: 58,
-    height: 34,
+    width: 54,
+    height: 31,
     borderBottomWidth: 8,
-    borderBottomColor: "#17211D",
+    borderBottomColor: colors.ink,
     borderRadius: 28,
-    marginTop: 54,
+    marginTop: 48,
   },
   agentBubble: {
     width: "100%",
-    minHeight: 116,
-    borderRadius: 8,
-    backgroundColor: "#FFFFFF",
+    minHeight: 124,
+    borderRadius: radius.md,
+    backgroundColor: colors.surface,
     padding: 18,
     justifyContent: "center",
   },
   agentLine: {
-    color: "#17211D",
+    color: colors.ink,
     fontSize: 20,
     lineHeight: 28,
     textAlign: "center",
-    fontWeight: "700",
+    fontWeight: "800",
   },
-  controls: {
+  primaryControls: {
+    width: "100%",
     flexDirection: "row",
-    flexWrap: "wrap",
-    justifyContent: "center",
     gap: 10,
   },
-  button: {
+  micButton: {
+    flex: 1,
+    minHeight: 58,
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
-    borderRadius: 8,
-    paddingHorizontal: 13,
-    paddingVertical: 12,
+    justifyContent: "center",
+    gap: 9,
+    borderRadius: radius.md,
+    backgroundColor: colors.gold,
+    ...shadow,
   },
-  listenButton: {
-    backgroundColor: "#FFD166",
+  micText: {
+    color: colors.greenDark,
+    fontSize: 16,
+    fontWeight: "900",
   },
   storyButton: {
-    backgroundColor: "#176B5B",
-  },
-  stopButton: {
-    backgroundColor: "#A53D3D",
+    flex: 1,
+    minHeight: 58,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 9,
+    borderRadius: radius.md,
+    backgroundColor: colors.green,
+    ...shadow,
   },
   disabled: {
     opacity: 0.45,
   },
-  listenText: {
-    color: "#2B2417",
-    fontWeight: "900",
+  pressed: {
+    transform: [{ scale: 0.99 }],
   },
   storyText: {
-    color: "#FFFFFF",
+    color: colors.surface,
+    fontSize: 15,
     fontWeight: "900",
   },
-  stopText: {
-    color: "#FFFFFF",
-    fontWeight: "900",
-  },
-  field: {
+  fallbackPanel: {
     width: "100%",
+    gap: 10,
+    borderRadius: radius.md,
+    padding: 14,
+    backgroundColor: "rgba(255,255,255,0.72)",
+  },
+  fallbackHeader: {
+    flexDirection: "row",
+    alignItems: "center",
     gap: 8,
   },
-  label: {
-    color: "#31413B",
-    fontWeight: "800",
+  fallbackTitle: {
+    color: colors.greenDark,
+    fontWeight: "900",
   },
   inputRow: {
     flexDirection: "row",
@@ -328,29 +415,57 @@ const styles = StyleSheet.create({
   input: {
     flex: 1,
     borderWidth: 1,
-    borderColor: "#C9BFAE",
-    borderRadius: 8,
+    borderColor: colors.line,
+    borderRadius: radius.sm,
     padding: 13,
-    backgroundColor: "#FFFFFF",
-    color: "#17211D",
+    backgroundColor: colors.surface,
+    color: colors.ink,
     fontSize: 15,
   },
   sendButton: {
-    width: 48,
+    width: 50,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 8,
-    backgroundColor: "#176B5B",
+    borderRadius: radius.sm,
+    backgroundColor: colors.green,
+  },
+  parentBar: {
+    width: "100%",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  stopButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    borderRadius: radius.sm,
+    paddingHorizontal: 13,
+    paddingVertical: 12,
+    backgroundColor: "#A53D3D",
+  },
+  stopText: {
+    color: colors.surface,
+    fontWeight: "900",
+  },
+  parentHint: {
+    flex: 1,
+    color: colors.muted,
+    fontSize: 12,
+    lineHeight: 17,
+    textAlign: "right",
+    fontWeight: "700",
   },
   summary: {
     width: "100%",
-    borderTopWidth: 1,
-    borderTopColor: "rgba(23, 33, 29, 0.16)",
-    paddingTop: 16,
+    borderRadius: radius.md,
+    padding: 16,
     gap: 10,
+    backgroundColor: "rgba(255,255,255,0.74)",
   },
   summaryTitle: {
-    color: "#17211D",
+    color: colors.ink,
     fontSize: 18,
     fontWeight: "900",
   },
@@ -360,12 +475,12 @@ const styles = StyleSheet.create({
   },
   summaryLabel: {
     width: 78,
-    color: "#52605B",
+    color: colors.muted,
     fontWeight: "900",
   },
   summaryValue: {
     flex: 1,
-    color: "#17211D",
+    color: colors.ink,
     fontWeight: "600",
   },
 });

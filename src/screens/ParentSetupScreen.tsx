@@ -9,8 +9,11 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
+import { Ionicons } from "@expo/vector-icons";
 
 import { OptionChip } from "../components/OptionChip";
+import { colors, radius, shadow } from "../design/theme";
 import {
   defaultParentConfig,
   Lesson,
@@ -66,51 +69,68 @@ export function ParentSetupScreen({ initialConfig, onStart }: ParentSetupScreenP
 
   return (
     <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.container}>
-      <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.eyebrow}>SauveParent MVP</Text>
-        <Text style={styles.title}>Configurer le cadre parent</Text>
-        <Text style={styles.intro}>
-          L'age parent reste la source de verite. L'agent pourra demander son age a l'enfant, mais adaptera toujours le contenu au cadre configure ici.
-        </Text>
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        <LinearGradient colors={["#FFF7EA", "#FFE5DC", "#DCEBFF"]} style={styles.hero}>
+          <View style={styles.brandRow}>
+            <View style={styles.logoMark}>
+              <Ionicons name="moon" size={18} color={colors.greenDark} />
+            </View>
+            <Text style={styles.brand}>SauveParent</Text>
+          </View>
+          <Text style={styles.title}>Un moment calme, cadre par le parent</Text>
+          <Text style={styles.intro}>
+            Reglez l'age, le ton et les sujets. L'enfant gardera l'impression de jouer, l'agent gardera le cadre.
+          </Text>
+          <View style={styles.promiseRow}>
+            <Promise icon="shield-checkmark-outline" label="Age parent prioritaire" />
+            <Promise icon="mic-outline" label="Audio-first" />
+            <Promise icon="heart-outline" label="Educatif doux" />
+          </View>
+        </LinearGradient>
 
-        <View style={styles.field}>
-          <Text style={styles.label}>Prenom de l'enfant</Text>
-          <TextInput
-            value={config.childName}
-            onChangeText={(childName) => setConfig((current) => ({ ...current, childName }))}
-            placeholder="Optionnel"
-            style={styles.input}
-            maxLength={24}
-          />
-        </View>
-
-        <View style={styles.row}>
-          <View style={[styles.field, styles.rowItem]}>
-            <Text style={styles.label}>Age reel</Text>
+        <View style={styles.section}>
+          <SectionHeader icon="person-outline" title="Profil enfant" detail="La base de securite de la session." />
+          <View style={styles.field}>
+            <Text style={styles.label}>Prenom</Text>
             <TextInput
-              value={String(config.childAge)}
-              onChangeText={(value) => setConfig((current) => ({ ...current, childAge: Number(value) || 4 }))}
-              keyboardType="number-pad"
+              value={config.childName}
+              onChangeText={(childName) => setConfig((current) => ({ ...current, childName }))}
+              placeholder="Optionnel"
+              placeholderTextColor="#8A958F"
               style={styles.input}
+              maxLength={24}
             />
           </View>
 
-          <View style={[styles.field, styles.rowItem]}>
-            <Text style={styles.label}>Duree</Text>
-            <View style={styles.chipRow}>
-              {[5, 10, 15].map((duration) => (
-                <OptionChip
-                  key={duration}
-                  label={`${duration} min`}
-                  selected={config.duration === duration}
-                  onPress={() => setConfig((current) => ({ ...current, duration: duration as StoryDuration }))}
-                />
-              ))}
+          <View style={styles.row}>
+            <View style={[styles.field, styles.rowItem]}>
+              <Text style={styles.label}>Age reel</Text>
+              <TextInput
+                value={String(config.childAge)}
+                onChangeText={(value) => setConfig((current) => ({ ...current, childAge: Number(value) || 4 }))}
+                keyboardType="number-pad"
+                style={styles.input}
+              />
+            </View>
+
+            <View style={[styles.field, styles.rowItem]}>
+              <Text style={styles.label}>Duree</Text>
+              <View style={styles.chipRow}>
+                {[5, 10, 15].map((duration) => (
+                  <OptionChip
+                    key={duration}
+                    label={`${duration} min`}
+                    selected={config.duration === duration}
+                    onPress={() => setConfig((current) => ({ ...current, duration: duration as StoryDuration }))}
+                  />
+                ))}
+              </View>
             </View>
           </View>
         </View>
 
-        <View style={styles.field}>
+        <View style={styles.section}>
+          <SectionHeader icon="sparkles-outline" title="Style de l'histoire" detail="Assez expressif pour l'enfant, assez fiable pour le parent." />
           <Text style={styles.label}>Voix</Text>
           <View style={styles.chipRow}>
             {(["soft", "funny"] as VoiceStyle[]).map((voiceStyle) => (
@@ -122,9 +142,7 @@ export function ParentSetupScreen({ initialConfig, onStart }: ParentSetupScreenP
               />
             ))}
           </View>
-        </View>
 
-        <View style={styles.field}>
           <Text style={styles.label}>Themes autorises</Text>
           <View style={styles.chipRow}>
             {allThemes.map((theme) => (
@@ -138,8 +156,8 @@ export function ParentSetupScreen({ initialConfig, onStart }: ParentSetupScreenP
           </View>
         </View>
 
-        <View style={styles.field}>
-          <Text style={styles.label}>Apprentissages legers</Text>
+        <View style={styles.section}>
+          <SectionHeader icon="school-outline" title="Education subtile" detail="Jamais scolaire, toujours integre dans l'histoire." />
           <View style={styles.chipRow}>
             {allLessons.map((lesson) => (
               <OptionChip
@@ -150,24 +168,49 @@ export function ParentSetupScreen({ initialConfig, onStart }: ParentSetupScreenP
               />
             ))}
           </View>
+
+          <View style={styles.field}>
+            <Text style={styles.label}>Sujets interdits</Text>
+            <TextInput
+              value={blockedText}
+              onChangeText={setBlockedText}
+              placeholder="Ex : monstres realistes, violence, separation"
+              placeholderTextColor="#8A958F"
+              style={[styles.input, styles.textarea]}
+              multiline
+            />
+          </View>
         </View>
 
-        <View style={styles.field}>
-          <Text style={styles.label}>Sujets interdits</Text>
-          <TextInput
-            value={blockedText}
-            onChangeText={setBlockedText}
-            placeholder="Ex : monstres realistes, violence, separation"
-            style={[styles.input, styles.textarea]}
-            multiline
-          />
-        </View>
-
-        <Pressable style={styles.primaryButton} onPress={submit}>
+        <Pressable style={({ pressed }) => [styles.primaryButton, pressed && styles.pressed]} onPress={submit}>
           <Text style={styles.primaryButtonText}>Demarrer la session enfant</Text>
+          <Ionicons name="arrow-forward" size={20} color={colors.surface} />
         </Pressable>
       </ScrollView>
     </KeyboardAvoidingView>
+  );
+}
+
+function Promise({ icon, label }: { icon: keyof typeof Ionicons.glyphMap; label: string }) {
+  return (
+    <View style={styles.promise}>
+      <Ionicons name={icon} size={16} color={colors.greenDark} />
+      <Text style={styles.promiseText}>{label}</Text>
+    </View>
+  );
+}
+
+function SectionHeader({ icon, title, detail }: { icon: keyof typeof Ionicons.glyphMap; title: string; detail: string }) {
+  return (
+    <View style={styles.sectionHeader}>
+      <View style={styles.sectionIcon}>
+        <Ionicons name={icon} size={18} color={colors.green} />
+      </View>
+      <View style={styles.sectionCopy}>
+        <Text style={styles.sectionTitle}>{title}</Text>
+        <Text style={styles.sectionDetail}>{detail}</Text>
+      </View>
+    </View>
   );
 }
 
@@ -178,33 +221,105 @@ function clamp(value: number, min: number, max: number) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#FFF7EA",
+    backgroundColor: colors.canvas,
   },
   content: {
-    padding: 24,
-    gap: 18,
+    padding: 18,
+    gap: 14,
+    paddingBottom: 28,
   },
-  eyebrow: {
-    color: "#63746D",
-    fontSize: 12,
-    fontWeight: "800",
-    textTransform: "uppercase",
-    letterSpacing: 1,
+  hero: {
+    borderRadius: radius.lg,
+    padding: 22,
+    gap: 14,
+    overflow: "hidden",
+    ...shadow,
+  },
+  brandRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  logoMark: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.72)",
+  },
+  brand: {
+    color: colors.greenDark,
+    fontSize: 15,
+    fontWeight: "900",
   },
   title: {
-    color: "#17211D",
-    fontSize: 36,
-    lineHeight: 40,
+    color: colors.ink,
+    fontSize: 34,
+    lineHeight: 38,
     fontWeight: "900",
   },
   intro: {
-    color: "#52605B",
+    color: colors.softText,
     fontSize: 16,
     lineHeight: 23,
   },
+  promiseRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  promise: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    borderRadius: radius.sm,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    backgroundColor: "rgba(255,255,255,0.64)",
+  },
+  promiseText: {
+    color: colors.greenDark,
+    fontSize: 12,
+    fontWeight: "800",
+  },
+  section: {
+    borderRadius: radius.md,
+    padding: 16,
+    gap: 14,
+    backgroundColor: colors.surface,
+    ...shadow,
+  },
+  sectionHeader: {
+    flexDirection: "row",
+    gap: 12,
+    alignItems: "center",
+  },
+  sectionIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: radius.sm,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.mint,
+  },
+  sectionCopy: {
+    flex: 1,
+    gap: 2,
+  },
+  sectionTitle: {
+    color: colors.ink,
+    fontSize: 18,
+    fontWeight: "900",
+  },
+  sectionDetail: {
+    color: colors.muted,
+    fontSize: 13,
+    lineHeight: 18,
+  },
   row: {
     flexDirection: "row",
-    gap: 14,
+    gap: 12,
   },
   rowItem: {
     flex: 1,
@@ -214,20 +329,20 @@ const styles = StyleSheet.create({
   },
   label: {
     color: "#31413B",
-    fontSize: 15,
-    fontWeight: "800",
+    fontSize: 14,
+    fontWeight: "900",
   },
   input: {
     borderWidth: 1,
-    borderColor: "#C9BFAE",
-    borderRadius: 8,
+    borderColor: colors.line,
+    borderRadius: radius.sm,
     padding: 13,
-    backgroundColor: "#FFFFFF",
-    color: "#17211D",
+    backgroundColor: "#FBFAF7",
+    color: colors.ink,
     fontSize: 16,
   },
   textarea: {
-    minHeight: 82,
+    minHeight: 84,
     textAlignVertical: "top",
   },
   chipRow: {
@@ -236,14 +351,21 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   primaryButton: {
+    minHeight: 56,
+    flexDirection: "row",
     alignItems: "center",
-    borderRadius: 8,
-    backgroundColor: "#176B5B",
+    justifyContent: "center",
+    gap: 10,
+    borderRadius: radius.md,
+    backgroundColor: colors.green,
     padding: 16,
-    marginTop: 6,
+    ...shadow,
+  },
+  pressed: {
+    transform: [{ scale: 0.99 }],
   },
   primaryButtonText: {
-    color: "#FFFFFF",
+    color: colors.surface,
     fontSize: 16,
     fontWeight: "900",
   },

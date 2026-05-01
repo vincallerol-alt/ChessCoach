@@ -1,5 +1,6 @@
 import React from "react";
 import { Pressable, StyleSheet, Text } from "react-native";
+import { colors, radius } from "../design/theme";
 
 interface OptionChipProps {
   label: string;
@@ -13,7 +14,7 @@ export function OptionChip({ label, selected, onPress }: OptionChipProps) {
       accessibilityRole="button"
       accessibilityState={{ selected }}
       onPress={onPress}
-      style={[styles.chip, selected && styles.selected]}
+      style={({ pressed }) => [styles.chip, selected && styles.selected, pressed && styles.pressed]}
     >
       <Text style={[styles.label, selected && styles.selectedLabel]}>{label}</Text>
     </Pressable>
@@ -23,21 +24,24 @@ export function OptionChip({ label, selected, onPress }: OptionChipProps) {
 const styles = StyleSheet.create({
   chip: {
     borderWidth: 1,
-    borderColor: "#C9BFAE",
-    borderRadius: 8,
+    borderColor: colors.line,
+    borderRadius: radius.sm,
     paddingHorizontal: 12,
     paddingVertical: 10,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: colors.surface,
   },
   selected: {
-    borderColor: "#176B5B",
-    backgroundColor: "#DDEFE9",
+    borderColor: colors.green,
+    backgroundColor: colors.mint,
+  },
+  pressed: {
+    transform: [{ scale: 0.98 }],
   },
   label: {
     color: "#31413B",
     fontWeight: "700",
   },
   selectedLabel: {
-    color: "#176B5B",
+    color: colors.green,
   },
 });
