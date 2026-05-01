@@ -1,0 +1,21 @@
+{
+  "expo": {
+    "name": "SauveParent",
+    "slug": "sauveparent",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "scheme": "sauveparent",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#E9F3EF"
+      }
+    },
+    "web": {
+      "bundler": "metro"
+    }
+  }
+}

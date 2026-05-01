@@ -1,24 +1,26 @@
-# SauveParent MVP
+# SauveParent
 
-Prototype audio-first d'agent vocal conteur pour enfants.
+MVP React Native/Expo d'un compagnon vocal audio-first pour enfants.
 
 ## Lancer
 
-Ouvrir `index.html` dans un navigateur moderne.
+```bash
+npm install
+npm run start
+```
 
-## Ce qui est implémenté
+Puis ouvrir l'app avec Expo Go, un simulateur iOS/Android, ou le mode web.
 
-- Configuration parent : âge réel, prénom, durée, voix, thèmes, apprentissages et sujets interdits.
-- Discussion enfant : âge, humeur, type d'histoire, héros.
-- Âge parent prioritaire : si l'enfant donne un autre âge, l'agent répond avec humour doux sans accusation.
-- Ton babysitter : bienveillant, poli, éducatif léger.
-- Synthèse vocale via Web Speech API.
-- Interruption : le bouton "Répondre / interrompre" coupe la voix en cours et écoute ou lit la saisie manuelle.
-- Garde-fous simples : transformation douce des demandes inadaptées.
-- Résumé parent : scénario, thèmes, alertes.
+## MVP inclus
 
-## Limites MVP
+- Configuration parent : age reel, prenom, duree, voix, themes, apprentissages, sujets interdits.
+- Session enfant : l'agent demande l'age, l'humeur, le style d'histoire et le heros.
+- Age parent prioritaire : si l'enfant donne un age incoherent, l'agent repond avec humour doux sans accusation.
+- Agent babysitter : bienveillant, poli, legerement educatif.
+- Audio-first : synthese vocale via `expo-speech`, bouton d'interruption, ecran enfant minimal.
+- Garde-fous : sujets interdits, mots sensibles, transformation douce vers une idee acceptable.
+- Resume parent : scenario, themes, alertes.
 
-- La reconnaissance vocale dépend du navigateur.
-- Le LLM temps réel n'est pas branché : le prototype simule l'orchestration et les garde-fous côté client.
-- Le hardware est volontairement hors scope à ce stade.
+## Limite volontaire
+
+Le STT et le LLM temps reel sont isoles derriere la logique de session mais pas encore branches. Cette version valide le parcours, le ton, les garde-fous et l'experience mobile avant d'ajouter une API vocale temps reel.
