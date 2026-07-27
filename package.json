@@ -7,6 +7,7 @@
   },
   "scripts": {
     "dev": "vinext dev",
+    "dev:mobile": "vinext dev --hostname 0.0.0.0 --port 4173",
     "build": "vinext build",
     "start": "vinext start",
     "test": "vitest run --config vitest.config.ts && npm run build && node --test tests/rendered-html.test.mjs",

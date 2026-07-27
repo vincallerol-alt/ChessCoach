@@ -44,4 +44,6 @@ next-env.d.ts
 # local preview
 .dev-stdout.log
 .dev-stderr.log
+.mobile-stdout.log
+.mobile-stderr.log
 *.tsbuildinfo

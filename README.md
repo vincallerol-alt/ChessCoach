@@ -9,6 +9,14 @@ npm install
 npm run dev
 ```
 
+### Depuis un téléphone sur le même Wi‑Fi
+
+```bash
+npm run dev:mobile
+```
+
+Puis ouvrir l’adresse `Network` affichée dans le terminal. Le PC doit rester allumé et le serveur actif.
+
 - Application PWA : Vinext/React 19, TypeScript, `react-chessboard`, `chess.js`, Dexie.
 - Données : import public Chess.com, cache IndexedDB et stockage D1 multi-utilisateur.
 - Jeu hors ligne : Stockfish 18 Lite single-threaded WASM (GPLv3, licence incluse dans `public/engine/COPYING.txt`).
