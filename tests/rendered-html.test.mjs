@@ -21,4 +21,5 @@ test("production build contains ChessCoach and its PWA manifest", async () => {
   assert.match(worker, /chesscom\/import/);
   assert.match(worker, /api\/sync/);
   assert.match(worker, /api\/coach/);
+  assert.match(worker, /realtime\/client_secrets/);
 });

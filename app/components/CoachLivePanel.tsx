@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { VoiceCoach } from "./VoiceCoach";
 
 type Props = {
   fen?: string;
@@ -75,6 +76,15 @@ export function CoachLivePanel({
         <div><span>♞</span><strong>Coach en direct</strong></div>
         <small>IA + contexte Stockfish</small>
       </div>
+      <VoiceCoach
+        fen={fen}
+        stepTitle={stepTitle}
+        playedMove={playedMove}
+        bestMove={bestMove}
+        evaluationLoss={evaluationLoss}
+        explanation={explanation}
+        onTranscript={(message) => setMessages((current) => [...current, message])}
+      />
       <div className="coach-live-suggestions">
         <button type="button" onClick={() => ask("Explique-moi cette position simplement.")}>Expliquer</button>
         <button type="button" onClick={() => ask("Quels sont les deux meilleurs plans candidats ?")}>Comparer les plans</button>

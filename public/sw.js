@@ -1,4 +1,4 @@
-const CACHE = "chesscoach-v4";
+const CACHE = "chesscoach-v5";
 const SHELL = ["/", "/manifest.webmanifest", "/favicon.svg", "/icon-192.png", "/icon-512.png"];
 
 self.addEventListener("install", (event) => {
