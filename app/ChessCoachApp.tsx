@@ -179,6 +179,7 @@ function TrainingView({
   onGameComplete,
   exercises,
   availableGameCount,
+  analyzedGameCount,
   onAttemptRecorded,
 }: {
   plan: TrainingPlan;
@@ -191,6 +192,7 @@ function TrainingView({
   onGameComplete: (game: BotGameSummary) => Promise<void>;
   exercises: Exercise[];
   availableGameCount: number;
+  analyzedGameCount: number;
   onAttemptRecorded: (correct: boolean, exercise: Exercise) => Promise<void>;
 }) {
   const [feedback, setFeedback] = useState<{ message: string; stage: number; reveal: boolean; move?: string } | null>(null);
@@ -397,18 +399,20 @@ function TrainingView({
 
       <section className="panel program-panel">
         <div className="panel-heading">
-          <div><span className="eyebrow">{availableGameCount} parties réellement disponibles</span><h2>Programme des 14 jours</h2></div>
+          <div><span className="eyebrow">{availableGameCount} parties importées · {analyzedGameCount} analysées</span><h2>Programme des 14 jours</h2></div>
           <span className="duration-pill">{program.startDate} → {program.endDate}</span>
         </div>
         <div className="program-grid">
           {program.sessions.map((session, index) => {
+            const preparedSession = preparePlan(session, exercises);
             const saved = history.find((item) => item.id === session.id);
-            const done = saved?.steps.filter((step) => step.completed).length ?? (session.id === plan.id ? completed : 0);
+            const displayedSession = saved ?? (session.id === plan.id ? plan : preparedSession);
+            const done = displayedSession.steps.filter((step) => step.completed).length;
             return (
-              <button key={session.id} type="button" className={`${session.id === plan.id ? "active" : ""} ${done === session.steps.length ? "done" : ""}`} onClick={() => onSelectSession(session)}>
+              <button key={session.id} type="button" className={`${session.id === plan.id ? "active" : ""} ${done === displayedSession.steps.length ? "done" : ""}`} onClick={() => onSelectSession(preparedSession)}>
                 <span>Jour {index + 1}</span>
                 <strong>{session.sessionKind === "match" ? "Partie réelle" : session.headline}</strong>
-                <small>{new Date(`${session.date}T12:00:00`).toLocaleDateString("fr-FR", { weekday: "short", day: "numeric", month: "short" })} · {done}/{session.steps.length}</small>
+                <small>{new Date(`${session.date}T12:00:00`).toLocaleDateString("fr-FR", { weekday: "short", day: "numeric", month: "short" })} · {done}/{displayedSession.steps.length}</small>
               </button>
             );
           })}
@@ -513,13 +517,14 @@ function PlayView({ focus, onGameComplete }: { focus: SkillArea; onGameComplete:
 
 function GamesView({ onGamesChange }: { onGamesChange: (games: Game[]) => void }) {
   const [games, setGames] = useState<Game[]>([]);
+  const [visibleCount, setVisibleCount] = useState(12);
   const [syncing, setSyncing] = useState(false);
   const [message, setMessage] = useState("Chargement de votre historique réel…");
   useEffect(() => {
     listCachedGames().then((items) => {
       setGames(items);
       onGamesChange(items);
-      setMessage(`${items.length} parties disponibles · ${items.filter((game) => game.analyzed).length} réellement analysées`);
+      setMessage(`${items.length} parties importées · ${items.filter((game) => game.analyzed).length} réellement analysées`);
     }).catch(() => undefined);
   }, [onGamesChange]);
   const sync = async () => {
@@ -533,7 +538,7 @@ function GamesView({ onGamesChange }: { onGamesChange: (games: Game[]) => void }
       const items = await listCachedGames();
       setGames(items);
       onGamesChange(items);
-      setMessage(`${items.length} parties disponibles · ${items.filter((game) => game.analyzed).length} réellement analysées`);
+      setMessage(`${items.length} parties importées · ${items.filter((game) => game.analyzed).length} réellement analysées`);
     } catch {
       setMessage("Hors ligne : vos parties en cache restent accessibles.");
     } finally {
@@ -569,10 +574,20 @@ function GamesView({ onGamesChange }: { onGamesChange: (games: Game[]) => void }
       <section className="panel games-table">
         <div className="table-head"><span>Partie</span><span>Cadence</span><span>Résultat</span><span>Analyse</span></div>
         {games.length === 0 && <p className="empty-state">Aucune partie enregistrée. Jouez contre Stockfish ou synchronisez Chess.com.</p>}
-        {games.slice(0, 12).map((game) => (
+        {games.slice(0, visibleCount).map((game) => (
 
           <div className="table-row" key={game.id}><span><strong>{game.white} – {game.black}</strong><small>{new Date(game.playedAt).toLocaleDateString("fr-FR")} · {game.source === "chesscoach" ? "ChessCoach" : game.source === "pgn" ? "PGN" : "Chess.com"}</small></span><span>{game.timeClass}</span><span className={`result ${game.result}`}>{game.result === "win" ? "Victoire" : game.result === "loss" ? "Défaite" : "Nulle"}</span><span>{game.analyzed ? "✓ Prête" : game.source === "chesscoach" ? "À analyser" : "En attente"}</span></div>
         ))}
+        {games.length > 0 && (
+          <div className="games-pagination">
+            <span>{Math.min(visibleCount, games.length)} affichées sur {games.length}</span>
+            {visibleCount < games.length && (
+              <button type="button" onClick={() => setVisibleCount((count) => Math.min(games.length, count + 24))}>
+                Afficher 24 parties de plus
+              </button>
+            )}
+          </div>
+        )}
       </section>
     </div>
   );
@@ -617,24 +632,22 @@ export function ChessCoachApp() {
 
   useEffect(() => {
     let cancelled = false;
-    loadTrainingPlan(activePlan.id).then((saved) => {
-      if (!cancelled && saved) setActivePlan(preparePlan(saved, snapshotExercises));
-    }).catch(() => undefined);
-    listTrainingPlans().then((plans) => {
-      if (!cancelled) setSessionHistory(plans);
-    }).catch(() => undefined);
-    listCachedExercises().then((exercises) => {
-      if (!cancelled) {
-        const merged = distinctExercises([...exercises, ...snapshotExercises]);
-        setExerciseLibrary(merged);
-        setActivePlan((current) => preparePlan(current, merged));
-      }
-    }).catch(() => undefined);
-    listAttempts().then((attempts) => {
-      if (!cancelled) setAttemptHistory(attempts);
-    }).catch(() => undefined);
-    listCachedGames().then((games) => {
-      if (!cancelled) setCachedGames(games);
+    Promise.all([
+      loadTrainingPlan(activePlan.id),
+      listTrainingPlans(),
+      listCachedExercises(),
+      listAttempts(),
+      listCachedGames(),
+    ]).then(async ([saved, plans, exercises, attempts, games]) => {
+      if (cancelled) return;
+      const merged = distinctExercises([...exercises, ...snapshotExercises]);
+      const normalizedPlans = plans.map((plan) => preparePlan(plan, merged));
+      await Promise.all(normalizedPlans.map((plan) => saveTrainingPlan(plan)));
+      setExerciseLibrary(merged);
+      setSessionHistory(normalizedPlans);
+      setAttemptHistory(attempts);
+      setCachedGames(games);
+      setActivePlan((current) => preparePlan(saved ?? current, merged));
     }).catch(() => undefined);
     return () => { cancelled = true; };
   }, [activePlan.id]);
@@ -647,12 +660,17 @@ export function ChessCoachApp() {
       setCloudSynced(true);
       setCachedGames(state.games);
       setAttemptHistory(state.attempts);
-      setSessionHistory(state.plans);
       const mergedExercises = distinctExercises([...state.exercises, ...snapshotExercises]);
+      const normalizedPlans = state.plans.map((plan) => preparePlan(plan, mergedExercises));
+      await Promise.all(normalizedPlans.map((plan) => saveTrainingPlan(plan)));
+      setSessionHistory(normalizedPlans);
       setExerciseLibrary(mergedExercises);
       setRuntimeSignals(signalsWithAttempts(weeklySignals, state.attempts, mergedExercises));
-      const syncedPlan = state.plans.find((plan) => plan.id === activePlan.id);
-      if (syncedPlan) setActivePlan(preparePlan(syncedPlan, mergedExercises));
+      const syncedPlan = normalizedPlans.find((plan) => plan.id === activePlan.id);
+      if (syncedPlan) setActivePlan(syncedPlan);
+      if (state.plans.some((plan) => plan.contentVersion !== 2)) {
+        void syncCloudState().catch(() => undefined);
+      }
     }).catch(() => {
       if (!cancelled) setCloudSynced(false);
     });
@@ -808,6 +826,7 @@ export function ChessCoachApp() {
               onGameComplete={recordBotGame}
               exercises={exerciseLibrary}
               availableGameCount={cachedGames.length}
+              analyzedGameCount={cachedGames.filter((game) => game.analyzed).length}
               onAttemptRecorded={async (correct, updatedExercise) => {
                 await cacheExercises([updatedExercise]);
                 setExerciseLibrary((current) => current.map((exercise) => exercise.id === updatedExercise.id ? updatedExercise : exercise));
