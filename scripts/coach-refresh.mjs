@@ -309,11 +309,60 @@ function buildProgram(profile, signals, exercises, startDate, sourceGameCount) {
     const signal = focusSignals[index % focusSignals.length] ?? signals[0];
     const isMatchDay = matchDays.has(index);
     const exercise = exercises[index % Math.max(1, exercises.length)];
+    const distinctExercises = Array.from(
+      { length: Math.min(5, exercises.length) },
+      (_, offset) => exercises[(index + offset) % exercises.length],
+    ).filter((item, itemIndex, items) =>
+      item && items.findIndex((candidate) => candidate.fen === item.fen) === itemIndex
+    );
+    const replayExercise = distinctExercises[0];
+    const reviewExercise = distinctExercises[1] ?? replayExercise;
+    const tacticExercises = distinctExercises.slice(2, 5);
+    const exerciseIds = tacticExercises.length ? tacticExercises.map((item) => item.id) : exercise ? [exercise.id] : [];
+    const replayStep = { id: "replay", kind: "replay", title: "Rejouer une erreur personnelle", minutes: 4, completed: false, exerciseIds: replayExercise ? [replayExercise.id] : [] };
+    const reviewStep = { id: "review", kind: "review", title: "Révision espacée · 1 position", minutes: 3, completed: false, exerciseIds: reviewExercise ? [reviewExercise.id] : [] };
+    const summaryStep = { id: "summary", kind: "summary", title: "Bilan et prochaine intention", minutes: 2, completed: false };
+    const miniGame = (minutes, title) => ({ id: "mini-game", kind: "mini-game", title, minutes, completed: false, startFen: replayExercise?.fen });
+    const stepsByFocus = {
+      tactics: [
+        replayStep,
+        reviewStep,
+        { id: "exercise", kind: "exercise", title: `Sprint tactique · ${exerciseIds.length} positions`, minutes: 6, completed: false, exerciseIds },
+        miniGame(5, "Conversion depuis la position critique"),
+        summaryStep,
+      ],
+      strategy: [
+        { ...replayStep, minutes: 5, title: "Diagnostiquer une décision de milieu de jeu" },
+        { id: "exercise", kind: "exercise", title: `Comparer les plans · ${exerciseIds.length} positions`, minutes: 7, completed: false, exerciseIds },
+        miniGame(6, "Mini-partie avec objectif positionnel"),
+        summaryStep,
+      ],
+      time: [
+        replayStep,
+        reviewStep,
+        { id: "exercise", kind: "exercise", title: `Décision rapide · ${exerciseIds.length} positions`, minutes: 5, completed: false, exerciseIds },
+        miniGame(6, "Mini-partie sous contrainte de temps"),
+        summaryStep,
+      ],
+      openings: [
+        { ...reviewStep, minutes: 4, title: "Retrouver le plan après l’ouverture" },
+        { id: "exercise", kind: "exercise", title: `Sortie d’ouverture · ${exerciseIds.length} positions`, minutes: 6, completed: false, exerciseIds },
+        miniGame(8, "Partie depuis la fin de l’ouverture"),
+        summaryStep,
+      ],
+      endgames: [
+        { ...replayStep, minutes: 5, title: "Rejouer une conversion manquée" },
+        { id: "exercise", kind: "exercise", title: `Technique de finale · ${exerciseIds.length} positions`, minutes: 7, completed: false, exerciseIds },
+        miniGame(6, "Finale pratique contre le coach"),
+        summaryStep,
+      ],
+    };
 
     sessions.push({
       id: `${profile.id}-${dateKey}`,
       date: dateKey,
       durationMinutes: isMatchDay ? 5 : 20,
+      contentVersion: 2,
       sessionKind: isMatchDay ? "match" : "training",
       focus: signal.area,
       headline: isMatchDay ? "Partie dirigée sur Chess.com" : signal.label,
@@ -326,13 +375,7 @@ function buildProgram(profile, signals, exercises, startDate, sourceGameCount) {
           { id: "review", kind: "review", title: "Relire la mission de jeu", minutes: 3, completed: false },
           { id: "summary", kind: "summary", title: "Noter le ressenti après la partie", minutes: 2, completed: false },
         ]
-        : [
-          { id: "replay", kind: "replay", title: "Rejouer une erreur personnelle", minutes: 4, completed: false },
-          { id: "review", kind: "review", title: "Révision espacée", minutes: 4, completed: false },
-          { id: "exercise", kind: "exercise", title: exercise?.title ?? signal.label, minutes: 5, completed: false },
-          { id: "mini-game", kind: "mini-game", title: "Mini-partie depuis la position critique", minutes: 5, completed: false },
-          { id: "summary", kind: "summary", title: "Bilan et mission Chess.com", minutes: 2, completed: false },
-        ],
+        : stepsByFocus[signal.area],
     });
   }
   return {

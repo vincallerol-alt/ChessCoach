@@ -7,7 +7,8 @@
   },
   "overrides": {
     "postcss": "8.5.23",
-    "sharp": "0.35.3"
+    "sharp": "0.35.3",
+    "ws": "8.21.1"
   },
   "scripts": {
     "dev": "vinext dev",
@@ -20,13 +21,15 @@
     "coach:refresh": "node scripts/coach-refresh.mjs"
   },
   "dependencies": {
+    "@openai/agents": "^0.13.5",
     "chess.js": "^1.4.0",
     "dexie": "^4.4.4",
     "drizzle-orm": "0.45.2",
     "next": "^16.2.12",
     "react": "19.2.6",
     "react-chessboard": "^5.10.0",
-    "react-dom": "19.2.6"
+    "react-dom": "19.2.6",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@cloudflare/vite-plugin": "1.37.1",

@@ -55,6 +55,32 @@ Une partie contre Stockfish terminée au mat, au temps ou par abandon est enregi
 
 Un exercice erroné reste verrouillé jusqu’au réessai. Le premier échec affiche le coup joué, le deuxième donne un principe, et le troisième révèle une comparaison avec une flèche vers le meilleur coup.
 
+## Coach interactif
+
+```mermaid
+flowchart LR
+  UI["Échiquier / exercice"] --> SF["Stockfish Lite"]
+  SF --> C["FEN, coup et évaluation"]
+  C --> API["/api/coach"]
+  API --> A["Agent OpenAI ChessCoach"]
+  A --> UI
+```
+
+Stockfish calcule ; l’agent explique. Le navigateur ne reçoit jamais la clé API. Voir [AGENT-COACH.md](AGENT-COACH.md).
+
+## Programme de 14 jours
+
+Les séances varient selon la compétence :
+
+- tactique : replay, révision, sprint multi-positions, conversion ;
+- stratégie : diagnostic, comparaison de plans, mini-partie positionnelle ;
+- temps : décisions rapides et mini-partie sous contrainte ;
+- ouverture : retrouver le plan puis jouer depuis la sortie d’ouverture ;
+- finale : conversion et finale pratique ;
+- journées match : mission Chess.com et bilan.
+
+Chaque étape référence ses propres exercices. La migration de contenu remet à zéro les anciennes validations qui ne prouvaient pas la réalisation d’un exercice.
+
 ## Synchronisation multiappareil
 
 ```mermaid

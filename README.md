@@ -12,6 +12,9 @@ PWA mobile-first de coaching d’échecs personnel pour `vincentito`. Elle propo
 - Android lance la PWA installée en plein écran lorsque le système le permet.
 - D1 synchronise parties, séances, exercices et tentatives entre appareils ; IndexedDB sert de cache hors ligne.
 - Les parties Stockfish sont analysées localement et peuvent créer immédiatement un exercice personnel.
+- Le coach OpenAI explique en direct une position ou une erreur à partir du contexte Stockfish.
+- Les séances sont différenciées et les séries tactiques enchaînent plusieurs positions.
+- Une partie peut démarrer depuis une FEN, un PGN ou une suite de coups SAN.
 - Maintenance hebdomadaire par Codex, avec un minimum de 5 parties avant de changer le focus.
 - Les PGN et noms d’adversaires ne sont jamais enregistrés dans Git.
 
@@ -42,5 +45,6 @@ npm run coach:refresh
 - [Architecture et diagrammes de flux](docs/ARCHITECTURE.md)
 - [Maintenance planifiée avec Codex](docs/MAINTENANCE.md)
 - [Mobile, données réelles et synchronisation](docs/MOBILE-ET-DONNEES.md)
+- [Agent coach OpenAI](docs/AGENT-COACH.md)
 
 La couche `EngineAdapter` permet d’ajouter Stockfish complet plus tard sans modifier le coach ni l’interface.

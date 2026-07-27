@@ -2,13 +2,15 @@
 
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { Chess } from "chess.js";
-import { AdaptiveCoachPlanner, defaultSignals, DeterministicCoachNarrator, weaknessPriority } from "../lib/coach";
+import { AdaptiveCoachPlanner, defaultSignals, DeterministicCoachNarrator, nextReviewDate, weaknessPriority } from "../lib/coach";
 import { syncCloudState } from "../lib/cloud-sync";
 import { createLocalId } from "../lib/ids";
 import { cacheExercises, cacheGames, listAttempts, listCachedExercises, listCachedGames, listTrainingPlans, loadTrainingPlan, queueAttempt, saveTrainingPlan } from "../lib/offline-db";
+import { distinctExercises, preparePlan } from "../lib/training-plan";
 import type { Attempt, BotGameSummary, Exercise, Game, PlayerProfile, SkillArea, TrainingPlan, TrainingProgram, WeaknessSignal } from "../lib/types";
 import coachSnapshot from "../data/coach-snapshot.json";
 import { ChessBoardPanel } from "./components/ChessBoardPanel";
+import { CoachLivePanel } from "./components/CoachLivePanel";
 
 type Tab = "today" | "play" | "training" | "games" | "progress";
 
@@ -25,11 +27,13 @@ const fallbackPlan = new AdaptiveCoachPlanner().buildDailyPlan(
   new Date(),
 );
 const trainingProgram = coachSnapshot.program as TrainingProgram;
+const snapshotExercises = coachSnapshot.exercises as Exercise[];
 const todayIso = new Date().toISOString().slice(0, 10);
-const initialPlan = trainingProgram.sessions.find((session) => session.date === todayIso)
+const rawInitialPlan = trainingProgram.sessions.find((session) => session.date === todayIso)
   ?? trainingProgram.sessions[0]
   ?? fallbackPlan;
-const snapshotExercise = coachSnapshot.exercises[0] as Exercise;
+
+const initialPlan = preparePlan(rawInitialPlan, snapshotExercises);
 const narrator = new DeterministicCoachNarrator();
 const skillLabels: Record<SkillArea, string> = {
   openings: "Ouvertures",
@@ -49,6 +53,8 @@ function signalsWithAttempts(signals: WeaknessSignal[], attempts: Attempt[], exe
     return { ...updated, priority: weaknessPriority(updated) };
   }).sort((left, right) => right.priority - left.priority);
 }
+
+const elapsedSince = (startedAt: number) => Date.now() - startedAt;
 
 const navigation: Array<{ id: Tab; label: string; icon: string }> = [
   { id: "today", label: "Aujourd’hui", icon: "⌂" },
@@ -171,7 +177,8 @@ function TrainingView({
   onSelectSession,
   onComplete,
   onGameComplete,
-  exercise,
+  exercises,
+  availableGameCount,
   onAttemptRecorded,
 }: {
   plan: TrainingPlan;
@@ -182,21 +189,29 @@ function TrainingView({
   onSelectSession: (plan: TrainingPlan) => void;
   onComplete: (stepId: string) => Promise<void>;
   onGameComplete: (game: BotGameSummary) => Promise<void>;
-  exercise: Exercise;
-  onAttemptRecorded: (correct: boolean) => Promise<void>;
+  exercises: Exercise[];
+  availableGameCount: number;
+  onAttemptRecorded: (correct: boolean, exercise: Exercise) => Promise<void>;
 }) {
   const [feedback, setFeedback] = useState<{ message: string; stage: number; reveal: boolean; move?: string } | null>(null);
   const [failedAttempts, setFailedAttempts] = useState(0);
   const [exerciseCycle, setExerciseCycle] = useState(0);
+  const [exerciseIndex, setExerciseIndex] = useState(0);
   const attemptStartedAt = useRef(0);
   const selectedStep = plan.steps.find((step) => step.id === selectedStepId) ?? plan.steps[0];
   const completed = plan.steps.filter((step) => step.completed).length;
+  const exerciseById = new Map(exercises.map((exercise) => [exercise.id, exercise]));
+  const stepExercises = (selectedStep.exerciseIds ?? [])
+    .map((id) => exerciseById.get(id))
+    .filter((exercise): exercise is Exercise => Boolean(exercise));
+  const exercise = stepExercises[exerciseIndex];
 
   useEffect(() => {
     attemptStartedAt.current = Date.now();
-  }, []);
+  }, [exercise?.id]);
 
   const handleResult = async (correct: boolean, move: string) => {
+    if (!exercise) return;
     const nextFailure = correct ? failedAttempts : failedAttempts + 1;
     if (correct) {
       setFeedback({ message: "Exact. Le candidat répond au problème immédiat de la position.", stage: 0, reveal: false, move });
@@ -228,12 +243,15 @@ function TrainingView({
       exerciseId: exercise.id,
       move,
       correct,
-      responseMs: Date.now() - attemptStartedAt.current,
+      responseMs: elapsedSince(attemptStartedAt.current),
       createdAt: new Date().toISOString(),
       synced: false,
     });
-    await onAttemptRecorded(correct);
-    if (correct) await onComplete(selectedStep.id);
+    await onAttemptRecorded(correct, {
+      ...exercise,
+      intervalDays: correct ? Math.min(30, Math.max(1, exercise.intervalDays * 2)) : 1,
+      dueAt: nextReviewDate(new Date(), exercise.intervalDays, correct).toISOString(),
+    });
   };
 
   const retryExercise = () => {
@@ -242,33 +260,58 @@ function TrainingView({
     attemptStartedAt.current = Date.now();
   };
 
+  const continueExercise = async () => {
+    if (exerciseIndex < stepExercises.length - 1) {
+      setExerciseIndex((index) => index + 1);
+      setFeedback(null);
+      setFailedAttempts(0);
+      setExerciseCycle((cycle) => cycle + 1);
+      return;
+    }
+    await onComplete(selectedStep.id);
+  };
+
   const stepContent = () => {
-    if (selectedStep.kind === "exercise" || selectedStep.kind === "replay") {
+    if (selectedStep.kind === "exercise" || selectedStep.kind === "replay" || (selectedStep.kind === "review" && plan.sessionKind !== "match")) {
+      if (!exercise) {
+        return (
+          <article className="panel step-action">
+            <span className="eyebrow">Données insuffisantes</span>
+            <h2>Aucune position disponible</h2>
+            <p>Cette étape restera non terminée jusqu’à la prochaine synchronisation ou partie analysée.</p>
+          </article>
+        );
+      }
       return (
-        <ChessBoardPanel
-          key={`${exercise.id}-${exerciseCycle}`}
-          mode="exercise"
-          fen={exercise.fen}
-          expectedMove={exercise.expectedMoves[0]}
-          onExerciseResult={handleResult}
-          coachArrows={feedback?.reveal
-            ? [{ startSquare: exercise.expectedMoves[0].slice(0, 2), endSquare: exercise.expectedMoves[0].slice(2, 4), color: "rgba(73, 151, 82, .9)" }]
-            : feedback?.stage === 1 && feedback.move
-              ? [{ startSquare: feedback.move.slice(0, 2), endSquare: feedback.move.slice(2, 4), color: "rgba(190, 76, 65, .86)" }]
-              : []}
-        />
+        <>
+          {stepExercises.length > 1 && (
+            <div className="exercise-sequence">
+              <strong>Position {exerciseIndex + 1}/{stepExercises.length}</strong>
+              <span>{exercise.title}</span>
+            </div>
+          )}
+          <ChessBoardPanel
+            key={`${exercise.id}-${exerciseCycle}`}
+            mode="exercise"
+            fen={exercise.fen}
+            expectedMove={exercise.expectedMoves[0]}
+            onExerciseResult={handleResult}
+            coachArrows={feedback?.reveal
+              ? [{ startSquare: exercise.expectedMoves[0].slice(0, 2), endSquare: exercise.expectedMoves[0].slice(2, 4), color: "rgba(73, 151, 82, .9)" }]
+              : feedback?.stage === 1 && feedback.move
+                ? [{ startSquare: feedback.move.slice(0, 2), endSquare: feedback.move.slice(2, 4), color: "rgba(190, 76, 65, .86)" }]
+                : []}
+          />
+        </>
       );
     }
     if (selectedStep.kind === "mini-game") {
       return (
         <>
           <p className="lead">Jouez une partie courte contre Stockfish Lite. La pendule et la force sont réglables sous l’échiquier.</p>
-          <ChessBoardPanel onGameComplete={(game) => {
+          <ChessBoardPanel key={selectedStep.startFen ?? "standard"} fen={selectedStep.startFen} onGameComplete={(game) => {
             void onGameComplete(game).then(() => onComplete(selectedStep.id));
           }} />
-          <button className="primary-button complete-step" type="button" onClick={() => onComplete(selectedStep.id)}>
-            Terminer la mini-partie
-          </button>
         </>
       );
     }
@@ -297,7 +340,7 @@ function TrainingView({
         <div>
           <span className="eyebrow">Étape {plan.steps.indexOf(selectedStep) + 1} sur {plan.steps.length} · {plan.focus}</span>
           <h1>{selectedStep.title}</h1>
-          <p className="lead">{selectedStep.kind === "exercise" || selectedStep.kind === "replay"
+          <p className="lead">{selectedStep.kind === "exercise" || selectedStep.kind === "replay" || (selectedStep.kind === "review" && plan.sessionKind !== "match")
             ? "Trouvez le meilleur candidat sans moteur. Le coach donnera un retour progressif après votre coup."
             : plan.rationale}</p>
           {stepContent()}
@@ -310,7 +353,7 @@ function TrainingView({
             <div className="feedback" role="status">
               <strong>{feedback.stage === 1 ? "À vous de rejouer" : feedback.stage === 2 ? "Indice du coach" : feedback.reveal ? "Solution expliquée" : "Bien joué"}</strong>
               <p>{feedback.message}</p>
-              {feedback.reveal && (
+              {feedback.reveal && exercise && (
                 <div className="move-comparison">
                   <span>Votre coup <strong>{feedback.move ?? exercise.comparisonMove ?? "—"}</strong></span>
                   <span>Meilleur coup <strong>{exercise.expectedMoves[0]}</strong></span>
@@ -319,10 +362,26 @@ function TrainingView({
               {feedback.stage > 0 && !feedback.reveal && (
                 <button className="secondary-button" type="button" onClick={retryExercise}>Réessayer la position</button>
               )}
-              {feedback.reveal && (
-                <button className="primary-button" type="button" onClick={() => onComplete(selectedStep.id)}>J’ai compris, continuer</button>
+              {(feedback.reveal || feedback.stage === 0) && (
+                <button className="primary-button" type="button" onClick={continueExercise}>
+                  {exerciseIndex < stepExercises.length - 1 ? "Exercice suivant →" : "Terminer l’étape"}
+                </button>
               )}
             </div>
+          )}
+          {exercise && (
+            <CoachLivePanel
+              fen={exercise.fen}
+              stepTitle={selectedStep.title}
+              playedMove={feedback?.move}
+              bestMove={feedback?.reveal ? exercise.expectedMoves[0] : undefined}
+              evaluationLoss={exercise.centipawnLoss}
+              explanation={exercise.explanation}
+              automaticQuestion={feedback && feedback.stage > 0
+                ? "Je viens de me tromper. Explique mon erreur sans me donner immédiatement la solution."
+                : undefined}
+              automaticKey={feedback && feedback.stage > 0 ? `${exercise.id}-${failedAttempts}` : undefined}
+            />
           )}
           <div className="compact-steps">
             {plan.steps.map((step, index) => (
@@ -338,7 +397,7 @@ function TrainingView({
 
       <section className="panel program-panel">
         <div className="panel-heading">
-          <div><span className="eyebrow">Basé sur {program.sourceGameCount} parties</span><h2>Programme des 14 jours</h2></div>
+          <div><span className="eyebrow">{availableGameCount} parties réellement disponibles</span><h2>Programme des 14 jours</h2></div>
           <span className="duration-pill">{program.startDate} → {program.endDate}</span>
         </div>
         <div className="program-grid">
@@ -372,14 +431,95 @@ function TrainingView({
   );
 }
 
+function PlayView({ focus, onGameComplete }: { focus: SkillArea; onGameComplete: (game: BotGameSummary) => Promise<void> }) {
+  const [positionInput, setPositionInput] = useState("");
+  const [startingFen, setStartingFen] = useState<string>();
+  const [currentFen, setCurrentFen] = useState(new Chess().fen());
+  const [positionError, setPositionError] = useState("");
+  const [boardCycle, setBoardCycle] = useState(0);
+
+  const startFromPosition = () => {
+    const value = positionInput.trim();
+    if (!value) {
+      setStartingFen(undefined);
+      setCurrentFen(new Chess().fen());
+      setBoardCycle((cycle) => cycle + 1);
+      setPositionError("");
+      return;
+    }
+    try {
+      const game = new Chess(value);
+      setStartingFen(game.fen());
+      setCurrentFen(game.fen());
+      setBoardCycle((cycle) => cycle + 1);
+      setPositionError("");
+      return;
+    } catch {
+      // The input may be PGN or a simple SAN move sequence.
+    }
+    try {
+      const game = new Chess();
+      try {
+        game.loadPgn(value);
+      } catch {
+        const tokens = value
+          .replace(/\d+\.(\.\.)?/g, " ")
+          .split(/\s+/)
+          .filter((token) => token && !["1-0", "0-1", "1/2-1/2", "*"].includes(token));
+        tokens.forEach((move) => game.move(move));
+      }
+      if (game.history().length === 0) throw new Error("empty");
+      setStartingFen(game.fen());
+      setCurrentFen(game.fen());
+      setBoardCycle((cycle) => cycle + 1);
+      setPositionError("");
+    } catch {
+      setPositionError("Position invalide. Collez une FEN ou une suite de coups PGN/SAN.");
+    }
+  };
+
+  return (
+    <div className="play-layout">
+      <div className="play-main">
+        <div className="play-intro">
+          <span className="eyebrow">Partie d’entraînement</span>
+          <h1>Jouez contre votre coach</h1>
+          <p className="lead">Démarrez normalement ou depuis n’importe quelle position légale.</p>
+          <div className="position-launcher">
+            <input
+              value={positionInput}
+              onChange={(event) => setPositionInput(event.target.value)}
+              placeholder="FEN ou coups : 1. e4 e5 2. Cf3…"
+            />
+            <button type="button" onClick={startFromPosition}>Créer la partie</button>
+          </div>
+          {positionError && <p className="position-error">{positionError}</p>}
+        </div>
+        <ChessBoardPanel
+          key={`${startingFen ?? "standard"}-${boardCycle}`}
+          fen={startingFen}
+          onPositionChange={setCurrentFen}
+          onGameComplete={(game) => { void onGameComplete(game); }}
+        />
+      </div>
+      <aside className="panel play-coach">
+        <CoachLivePanel fen={currentFen} stepTitle="Partie contre Stockfish Lite" />
+        <div className="contract-item"><span>Focus</span><strong>{skillLabels[focus]}</strong></div>
+        <div className="contract-item"><span>Après-partie</span><strong>Exercice automatique</strong></div>
+      </aside>
+    </div>
+  );
+}
+
 function GamesView({ onGamesChange }: { onGamesChange: (games: Game[]) => void }) {
   const [games, setGames] = useState<Game[]>([]);
   const [syncing, setSyncing] = useState(false);
-  const [message, setMessage] = useState("Analyse prioritaire : 300 dernières parties rapid/blitz");
+  const [message, setMessage] = useState("Chargement de votre historique réel…");
   useEffect(() => {
     listCachedGames().then((items) => {
       setGames(items);
       onGamesChange(items);
+      setMessage(`${items.length} parties disponibles · ${items.filter((game) => game.analyzed).length} réellement analysées`);
     }).catch(() => undefined);
   }, [onGamesChange]);
   const sync = async () => {
@@ -393,7 +533,7 @@ function GamesView({ onGamesChange }: { onGamesChange: (games: Game[]) => void }
       const items = await listCachedGames();
       setGames(items);
       onGamesChange(items);
-      setMessage(`${data.imported} parties disponibles · doublons ignorés`);
+      setMessage(`${items.length} parties disponibles · ${items.filter((game) => game.analyzed).length} réellement analysées`);
     } catch {
       setMessage("Hors ligne : vos parties en cache restent accessibles.");
     } finally {
@@ -469,7 +609,7 @@ export function ChessCoachApp() {
   const [activePlan, setActivePlan] = useState<TrainingPlan>(initialPlan);
   const [selectedStepId, setSelectedStepId] = useState(initialPlan.steps[0]?.id ?? "");
   const [sessionHistory, setSessionHistory] = useState<TrainingPlan[]>([]);
-  const [activeExercise, setActiveExercise] = useState<Exercise>(snapshotExercise);
+  const [exerciseLibrary, setExerciseLibrary] = useState<Exercise[]>(snapshotExercises);
   const [attemptHistory, setAttemptHistory] = useState<Attempt[]>([]);
   const [cachedGames, setCachedGames] = useState<Game[]>([]);
   const [cloudSynced, setCloudSynced] = useState(false);
@@ -478,13 +618,17 @@ export function ChessCoachApp() {
   useEffect(() => {
     let cancelled = false;
     loadTrainingPlan(activePlan.id).then((saved) => {
-      if (!cancelled && saved) setActivePlan(saved);
+      if (!cancelled && saved) setActivePlan(preparePlan(saved, snapshotExercises));
     }).catch(() => undefined);
     listTrainingPlans().then((plans) => {
       if (!cancelled) setSessionHistory(plans);
     }).catch(() => undefined);
     listCachedExercises().then((exercises) => {
-      if (!cancelled && exercises.length) setActiveExercise(exercises[0]);
+      if (!cancelled) {
+        const merged = distinctExercises([...exercises, ...snapshotExercises]);
+        setExerciseLibrary(merged);
+        setActivePlan((current) => preparePlan(current, merged));
+      }
     }).catch(() => undefined);
     listAttempts().then((attempts) => {
       if (!cancelled) setAttemptHistory(attempts);
@@ -504,10 +648,11 @@ export function ChessCoachApp() {
       setCachedGames(state.games);
       setAttemptHistory(state.attempts);
       setSessionHistory(state.plans);
-      if (state.exercises.length) setActiveExercise(state.exercises[0]);
-      setRuntimeSignals(signalsWithAttempts(weeklySignals, state.attempts, state.exercises));
+      const mergedExercises = distinctExercises([...state.exercises, ...snapshotExercises]);
+      setExerciseLibrary(mergedExercises);
+      setRuntimeSignals(signalsWithAttempts(weeklySignals, state.attempts, mergedExercises));
       const syncedPlan = state.plans.find((plan) => plan.id === activePlan.id);
-      if (syncedPlan) setActivePlan(syncedPlan);
+      if (syncedPlan) setActivePlan(preparePlan(syncedPlan, mergedExercises));
     }).catch(() => {
       if (!cancelled) setCloudSynced(false);
     });
@@ -532,8 +677,9 @@ export function ChessCoachApp() {
   };
 
   const selectSession = (session: TrainingPlan) => {
-    setActivePlan(session);
-    setSelectedStepId(session.steps.find((step) => !step.completed)?.id ?? session.steps[0]?.id ?? "");
+    const prepared = preparePlan(session, exerciseLibrary);
+    setActivePlan(prepared);
+    setSelectedStepId(prepared.steps.find((step) => !step.completed)?.id ?? prepared.steps[0]?.id ?? "");
     setTab("training");
   };
 
@@ -558,10 +704,10 @@ export function ChessCoachApp() {
       sourceId,
       playedAt: summary.playedAt,
       timeClass: summary.timeClass,
-      playerColor: "white",
+      playerColor: summary.playerColor,
       result: summary.result,
-      white: profile.chessComUsername,
-      black: `ChessCoach · Stockfish Lite ${summary.timeControl}`,
+      white: summary.playerColor === "white" ? profile.chessComUsername : `ChessCoach · Stockfish Lite ${summary.timeControl}`,
+      black: summary.playerColor === "black" ? profile.chessComUsername : `ChessCoach · Stockfish Lite ${summary.timeControl}`,
       pgn: summary.pgn,
       analyzed: summary.criticalPositions.length > 0,
       timeControl: summary.timeControl,
@@ -588,12 +734,16 @@ export function ChessCoachApp() {
         comparisonMove: critical.playedMove,
       };
       await cacheExercises([exercise]);
-      setActiveExercise(exercise);
+      setExerciseLibrary((current) => distinctExercises([exercise, ...current]));
       const adaptedPlan: TrainingPlan = {
         ...activePlan,
         focus: critical.area,
         rationale: `Votre dernière partie Stockfish a révélé une position à ${critical.centipawnLoss} centipions de perte.`,
-        steps: activePlan.steps.map((step) => step.kind === "exercise" ? { ...step, title: exercise.title, completed: false } : step),
+        steps: activePlan.steps.map((step) => {
+          if (step.kind === "replay") return { ...step, exerciseIds: [exercise.id], completed: false };
+          if (step.kind === "mini-game") return { ...step, startFen: exercise.fen, completed: false };
+          return step;
+        }),
       };
       setActivePlan(adaptedPlan);
       await saveTrainingPlan(adaptedPlan);
@@ -643,8 +793,8 @@ export function ChessCoachApp() {
           <div className="top-actions"><span className={`connection ${online ? "" : "offline"}`}>{online ? cloudSynced ? "Cloud synchronisé" : "Synchronisation…" : "Mode hors ligne"}</span>{installPrompt && <button className="install-button" type="button" onClick={() => installPrompt.prompt()}>Installer l’app</button>}{streak > 0 && <div className="streak"><span>♨</span><strong>{streak}</strong><small>jours</small></div>}<span className="avatar">{profile.displayName.slice(0, 2).toUpperCase()}</span></div>
         </header>
         <div className="content">
-          {tab === "today" && <TodayView plan={activePlan} profile={profile} signals={runtimeSignals} analyzedGames={coachSnapshot.analysis.gamesAnalyzed + cachedGames.filter((game) => game.source === "chesscoach" && game.analyzed).length} history={sessionHistory} onStart={startSession} />}
-          {tab === "play" && <div className="play-layout"><div className="play-main"><div className="play-intro"><span className="eyebrow">Partie d’entraînement</span><h1>Jouez contre votre coach</h1><p className="lead">Stockfish Lite analyse ensuite vos décisions et prépare une position à rejouer.</p></div><ChessBoardPanel onGameComplete={(game) => { void recordBotGame(game); }} /></div><aside className="panel play-coach"><div className="coach-avatar">♞</div><h2>Contrat de la partie</h2><p>Avant chaque coup calme, formulez un plan en une phrase : pire pièce, faiblesse cible, échange utile.</p><div className="contract-item"><span>Focus</span><strong>{skillLabels[activePlan.focus]}</strong></div><div className="contract-item"><span>Cadence mentale</span><strong>2 candidats</strong></div><div className="contract-item"><span>Après-partie</span><strong>Exercice automatique</strong></div></aside></div>}
+          {tab === "today" && <TodayView plan={activePlan} profile={profile} signals={runtimeSignals} analyzedGames={cachedGames.filter((game) => game.analyzed).length} history={sessionHistory} onStart={startSession} />}
+          {tab === "play" && <PlayView focus={activePlan.focus} onGameComplete={recordBotGame} />}
           {tab === "training" && (
             <TrainingView
               key={`${activePlan.id}-${selectedStepId}`}
@@ -656,11 +806,14 @@ export function ChessCoachApp() {
               onSelectSession={selectSession}
               onComplete={completeStep}
               onGameComplete={recordBotGame}
-              exercise={activeExercise}
-              onAttemptRecorded={async (correct) => {
+              exercises={exerciseLibrary}
+              availableGameCount={cachedGames.length}
+              onAttemptRecorded={async (correct, updatedExercise) => {
+                await cacheExercises([updatedExercise]);
+                setExerciseLibrary((current) => current.map((exercise) => exercise.id === updatedExercise.id ? updatedExercise : exercise));
                 setAttemptHistory(await listAttempts());
                 setRuntimeSignals((current) => current.map((signal) => {
-                  if (signal.area !== activeExercise.area) return signal;
+                  if (signal.area !== updatedExercise.area) return signal;
                   const updated = {
                     ...signal,
                     failedAttempts: Math.min(1, Math.max(0, signal.failedAttempts + (correct ? -0.04 : 0.08))),

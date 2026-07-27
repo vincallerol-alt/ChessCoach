@@ -20,4 +20,5 @@ test("production build contains ChessCoach and its PWA manifest", async () => {
   const worker = await readFile(new URL("../dist/server/index.js", import.meta.url), "utf8");
   assert.match(worker, /chesscom\/import/);
   assert.match(worker, /api\/sync/);
+  assert.match(worker, /api\/coach/);
 });

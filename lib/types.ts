@@ -46,6 +46,7 @@ export type BotGameSummary = {
   result: Game["result"];
   timeClass: Game["timeClass"];
   timeControl: string;
+  playerColor: Game["playerColor"];
   playedAt: string;
   criticalPositions: CriticalPosition[];
 };
@@ -104,6 +105,7 @@ export type TrainingPlan = {
   id: string;
   date: string;
   durationMinutes: number;
+  contentVersion?: number;
   sessionKind?: "training" | "match";
   focus: SkillArea;
   headline: string;
@@ -115,6 +117,8 @@ export type TrainingPlan = {
     title: string;
     minutes: number;
     completed: boolean;
+    exerciseIds?: string[];
+    startFen?: string;
   }>;
 };
 

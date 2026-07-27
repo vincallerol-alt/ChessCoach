@@ -7,6 +7,10 @@
 - Historique compact des huit derniers demi-coups.
 - Zones sûres Android/iOS via `env(safe-area-inset-*)`.
 - Feedback d’exercice maintenu visible au-dessus de la navigation.
+- Les étapes replay, révision et série utilisent des positions distinctes.
+- Une série tactique enchaîne plusieurs positions sans retour au menu.
+- Une étape reste incomplète si aucune position n’est disponible.
+- La mini-partie démarre sur la FEN indiquée et oriente l’échiquier du côté du joueur.
 
 ## PWA Android
 
@@ -15,6 +19,8 @@
 ## Données réelles
 
 Les compétences viennent du snapshot calculé sur les parties. Les volumes, taux de réussite, série de séances et historique sont calculés depuis les enregistrements réels. Aucun exemple de partie ou pourcentage fictif n’est affiché lorsque les données manquent.
+
+Les libellés « 300 dernières parties » et « 50 analysées » ne servent plus de compteurs. L’interface affiche uniquement les parties présentes et celles dont `analyzed=true`.
 
 ## Boucle Stockfish
 
