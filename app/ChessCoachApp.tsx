@@ -3,8 +3,10 @@
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { Chess } from "chess.js";
 import { AdaptiveCoachPlanner, defaultSignals, DeterministicCoachNarrator } from "../lib/coach";
-import { cacheGames, queueAttempt, syncPendingAttempts } from "../lib/offline-db";
-import type { Game, PlayerProfile } from "../lib/types";
+import { createLocalId } from "../lib/ids";
+import { cacheGames, listTrainingPlans, loadTrainingPlan, queueAttempt, saveTrainingPlan, syncPendingAttempts } from "../lib/offline-db";
+import type { Exercise, Game, PlayerProfile, TrainingPlan, TrainingProgram, WeaknessSignal } from "../lib/types";
+import coachSnapshot from "../data/coach-snapshot.json";
 import { ChessBoardPanel } from "./components/ChessBoardPanel";
 
 type Tab = "today" | "play" | "training" | "games" | "progress";
@@ -14,20 +16,19 @@ type BeforeInstallPromptEvent = Event & {
   userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
 };
 
-const profile: PlayerProfile = {
-  id: "vincentito",
-  chessComUsername: "vincentito",
-  displayName: "Vincent",
-  blitzRating: 1373,
-  blitzPeak: 1501,
-  targetRating: 1500,
-  dailyMinutes: 20,
-  skillRatings: { openings: 1300, tactics: 1350, strategy: 1250, endgames: 1400, time: 1280 },
-  strengths: ["Finales", "Scandinave avec les Noirs"],
-  focusAreas: ["Plans de milieu de jeu", "Décisions sous pression"],
-};
-
-const plan = new AdaptiveCoachPlanner().buildDailyPlan(profile, defaultSignals, new Date());
+const profile = coachSnapshot.profile as PlayerProfile;
+const weeklySignals = coachSnapshot.signals as WeaknessSignal[];
+const fallbackPlan = new AdaptiveCoachPlanner().buildDailyPlan(
+  profile,
+  weeklySignals.length ? weeklySignals : defaultSignals,
+  new Date(),
+);
+const trainingProgram = coachSnapshot.program as TrainingProgram;
+const todayIso = new Date().toISOString().slice(0, 10);
+const initialPlan = trainingProgram.sessions.find((session) => session.date === todayIso)
+  ?? trainingProgram.sessions[0]
+  ?? fallbackPlan;
+const primaryExercise = coachSnapshot.exercises[0] as Exercise;
 const demoGames = [
   { id: "demo-1", white: "vincentito", black: "opponent_1420", playedAt: "2026-07-27T12:00:00.000Z", timeClass: "blitz", result: "win", analyzed: true },
   { id: "demo-2", white: "opponent_1391", black: "vincentito", playedAt: "2026-07-26T12:00:00.000Z", timeClass: "blitz", result: "loss", analyzed: true },
@@ -61,7 +62,7 @@ function SkillMeter({ label, value, tone = "normal" }: { label: string; value: n
   );
 }
 
-function TodayView({ onStart }: { onStart: () => void }) {
+function TodayView({ plan, onStart }: { plan: TrainingPlan; onStart: (stepId?: string) => void }) {
   const completed = plan.steps.filter((step) => step.completed).length;
   return (
     <div className="view-stack">
@@ -70,7 +71,9 @@ function TodayView({ onStart }: { onStart: () => void }) {
           <span className="eyebrow">Séance du jour · {plan.durationMinutes} min</span>
           <h1>{plan.headline}</h1>
           <p>{plan.rationale}</p>
-          <button className="primary-button" type="button" onClick={onStart}>Reprendre ma séance <span>→</span></button>
+          <button className="primary-button" type="button" onClick={() => onStart()}>
+            {completed ? "Reprendre ma séance" : "Commencer ma séance"} <span>→</span>
+          </button>
         </div>
         <div className="session-ring" style={{ "--progress": `${(completed / plan.steps.length) * 360}deg` } as React.CSSProperties}>
           <div><strong>{completed}/{plan.steps.length}</strong><span>étapes</span></div>
@@ -82,7 +85,7 @@ function TodayView({ onStart }: { onStart: () => void }) {
           <div className="panel-heading"><div><span className="eyebrow">Programme adaptatif</span><h2>Votre parcours aujourd’hui</h2></div><span className="duration-pill">20 min</span></div>
           <div className="steps-list">
             {plan.steps.map((step, index) => (
-              <button className={`step-row ${step.completed ? "done" : ""} ${index === completed ? "active" : ""}`} key={step.id} type="button" onClick={onStart}>
+              <button className={`step-row ${step.completed ? "done" : ""} ${index === completed ? "active" : ""}`} key={step.id} type="button" onClick={() => onStart(step.id)}>
                 <span className="step-index">{step.completed ? "✓" : index + 1}</span>
                 <span><strong>{step.title}</strong><small>{step.kind === "replay" ? "Issue de vos dernières parties" : step.kind === "mini-game" ? "Depuis une position critique" : "Personnalisé par le coach"}</small></span>
                 <em>{step.minutes} min</em>
@@ -121,35 +124,141 @@ function TodayView({ onStart }: { onStart: () => void }) {
   );
 }
 
-function TrainingView() {
+function TrainingView({
+  plan,
+  program,
+  history,
+  selectedStepId,
+  onSelectStep,
+  onSelectSession,
+  onComplete,
+}: {
+  plan: TrainingPlan;
+  program: TrainingProgram;
+  history: TrainingPlan[];
+  selectedStepId: string;
+  onSelectStep: (stepId: string) => void;
+  onSelectSession: (plan: TrainingPlan) => void;
+  onComplete: (stepId: string) => Promise<void>;
+}) {
   const [feedback, setFeedback] = useState<string | null>(null);
+  const selectedStep = plan.steps.find((step) => step.id === selectedStepId) ?? plan.steps[0];
+  const completed = plan.steps.filter((step) => step.completed).length;
   const handleResult = async (correct: boolean, move: string) => {
-    setFeedback(correct ? "Position comprise. Elle reviendra dans 3 jours." : "À revoir demain : cherchez 0-0-0 pour connecter la tour.");
+    setFeedback(correct
+      ? "Position comprise. Elle reviendra dans 3 jours."
+      : `À revoir demain : ${primaryExercise.explanation}`);
     await queueAttempt({
-      id: crypto.randomUUID(),
-      exerciseId: "castle-activation",
+      id: createLocalId("attempt"),
+      exerciseId: primaryExercise.id,
       move,
       correct,
       responseMs: 0,
       createdAt: new Date().toISOString(),
       synced: false,
     });
+    if (correct) await onComplete(selectedStep.id);
   };
+
+  const stepContent = () => {
+    if (selectedStep.kind === "exercise" || selectedStep.kind === "replay") {
+      return (
+        <ChessBoardPanel
+          mode="exercise"
+          fen={primaryExercise.fen}
+          expectedMove={primaryExercise.expectedMoves[0]}
+          onExerciseResult={handleResult}
+        />
+      );
+    }
+    if (selectedStep.kind === "mini-game") {
+      return (
+        <>
+          <p className="lead">Jouez une partie courte contre Stockfish Lite. La pendule et la force sont réglables sous l’échiquier.</p>
+          <ChessBoardPanel />
+          <button className="primary-button complete-step" type="button" onClick={() => onComplete(selectedStep.id)}>
+            Terminer la mini-partie
+          </button>
+        </>
+      );
+    }
+    return (
+      <article className="panel step-action">
+        <span className="eyebrow">{plan.sessionKind === "match" ? "Mission Chess.com" : "Consigne du coach"}</span>
+        <h2>{selectedStep.title}</h2>
+        <p>{selectedStep.kind === "review"
+          ? plan.playMission ?? "Revoyez la position et formulez deux candidats avant de consulter la solution."
+          : "Notez en une phrase ce qui a fonctionné et le point à surveiller lors de la prochaine séance."}</p>
+        {plan.sessionKind === "match" && (
+          <a className="secondary-button" href="https://www.chess.com/play/online" target="_blank" rel="noreferrer">
+            Jouer sur Chess.com
+          </a>
+        )}
+        <button className="primary-button" type="button" onClick={() => onComplete(selectedStep.id)}>
+          {selectedStep.completed ? "Étape terminée ✓" : "Marquer comme terminé"}
+        </button>
+      </article>
+    );
+  };
+
   return (
-    <div className="training-layout">
-      <div>
-        <span className="eyebrow">Étape 3 sur 5 · Stratégie</span>
-        <h1>Activez votre dernière pièce</h1>
-        <p className="lead">Cette position vient d’un motif récurrent : vous avez de bons coups, mais vous retardez la coordination des tours.</p>
-        <ChessBoardPanel mode="exercise" expectedMove="e1c1" onExerciseResult={handleResult} />
+    <div className="view-stack">
+      <div className="training-layout">
+        <div>
+          <span className="eyebrow">Étape {plan.steps.indexOf(selectedStep) + 1} sur {plan.steps.length} · {plan.focus}</span>
+          <h1>{selectedStep.title}</h1>
+          <p className="lead">{selectedStep.kind === "exercise" || selectedStep.kind === "replay" ? primaryExercise.explanation : plan.rationale}</p>
+          {stepContent()}
+        </div>
+        <aside className="panel exercise-coach">
+          <div className="coach-avatar">♞</div>
+          <h2>Votre séance complète</h2>
+          <p>{completed}/{plan.steps.length} étapes réellement terminées.</p>
+          <div className="compact-steps">
+            {plan.steps.map((step, index) => (
+              <button key={step.id} className={`${step.id === selectedStep.id ? "active" : ""} ${step.completed ? "done" : ""}`} type="button" onClick={() => onSelectStep(step.id)}>
+                <span>{step.completed ? "✓" : index + 1}</span>
+                <strong>{step.title}</strong>
+                <small>{step.minutes} min</small>
+              </button>
+            ))}
+          </div>
+          {feedback && <div className="feedback" role="status">{feedback}</div>}
+        </aside>
       </div>
-      <aside className="panel exercise-coach">
-        <div className="coach-avatar">♞</div>
-        <h2>Question du coach</h2>
-        <p>Quel coup termine le développement, protège le roi et rend immédiatement la tour active ?</p>
-        <div className="thinking-list"><span>1</span><p>Repérez votre pièce la moins active.</p><span>2</span><p>Vérifiez les menaces adverses.</p><span>3</span><p>Comparez les deux meilleurs plans.</p></div>
-        {feedback && <div className="feedback" role="status">{feedback}</div>}
-      </aside>
+
+      <section className="panel program-panel">
+        <div className="panel-heading">
+          <div><span className="eyebrow">Basé sur {program.sourceGameCount} parties</span><h2>Programme des 14 jours</h2></div>
+          <span className="duration-pill">{program.startDate} → {program.endDate}</span>
+        </div>
+        <div className="program-grid">
+          {program.sessions.map((session, index) => {
+            const saved = history.find((item) => item.id === session.id);
+            const done = saved?.steps.filter((step) => step.completed).length ?? (session.id === plan.id ? completed : 0);
+            return (
+              <button key={session.id} type="button" className={`${session.id === plan.id ? "active" : ""} ${done === session.steps.length ? "done" : ""}`} onClick={() => onSelectSession(session)}>
+                <span>Jour {index + 1}</span>
+                <strong>{session.sessionKind === "match" ? "Partie réelle" : session.headline}</strong>
+                <small>{new Date(`${session.date}T12:00:00`).toLocaleDateString("fr-FR", { weekday: "short", day: "numeric", month: "short" })} · {done}/{session.steps.length}</small>
+              </button>
+            );
+          })}
+        </div>
+      </section>
+
+      <section className="panel history-panel">
+        <div className="panel-heading"><div><span className="eyebrow">IndexedDB local</span><h2>Historique des séances commencées</h2></div></div>
+        {history.length === 0
+          ? <p>Aucune séance terminée pour le moment. Votre progression commence à 0.</p>
+          : history.map((session) => (
+            <button key={session.id} type="button" onClick={() => onSelectSession(session)}>
+              <span>{new Date(`${session.date}T12:00:00`).toLocaleDateString("fr-FR")}</span>
+              <strong>{session.headline}</strong>
+              <small>{session.steps.filter((step) => step.completed).length}/{session.steps.length} étapes</small>
+            </button>
+          ))}
+      </section>
     </div>
   );
 }
@@ -185,7 +294,7 @@ function GamesView() {
       const playerIsWhite = (headers.White ?? "").toLowerCase() === profile.chessComUsername;
       const resultHeader = headers.Result ?? "*";
       const result: Game["result"] = resultHeader === "1/2-1/2" ? "draw" : (resultHeader === "1-0") === playerIsWhite ? "win" : "loss";
-      const sourceId = crypto.randomUUID();
+      const sourceId = createLocalId("pgn");
       const game: Game = { id: `pgn-${sourceId}`, source: "pgn", sourceId, playedAt: new Date().toISOString(), timeClass: "other", playerColor: playerIsWhite ? "white" : "black", result, white: headers.White ?? "Blancs", black: headers.Black ?? "Noirs", pgn, analyzed: false };
       setGames((current) => [game, ...current]);
       await cacheGames([game]);
@@ -228,6 +337,20 @@ export function ChessCoachApp() {
   const [tab, setTab] = useState<Tab>("today");
   const online = useSyncExternalStore(subscribeNetwork, () => navigator.onLine, () => true);
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
+  const [activePlan, setActivePlan] = useState<TrainingPlan>(initialPlan);
+  const [selectedStepId, setSelectedStepId] = useState(initialPlan.steps[0]?.id ?? "");
+  const [sessionHistory, setSessionHistory] = useState<TrainingPlan[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    loadTrainingPlan(activePlan.id).then((saved) => {
+      if (!cancelled && saved) setActivePlan(saved);
+    }).catch(() => undefined);
+    listTrainingPlans().then((plans) => {
+      if (!cancelled) setSessionHistory(plans);
+    }).catch(() => undefined);
+    return () => { cancelled = true; };
+  }, [activePlan.id]);
 
   useEffect(() => {
     if (online) syncPendingAttempts().catch(() => undefined);
@@ -242,13 +365,40 @@ export function ChessCoachApp() {
     };
   }, []);
 
+  const startSession = (stepId?: string) => {
+    const nextStep = stepId
+      ?? activePlan.steps.find((step) => !step.completed)?.id
+      ?? activePlan.steps[0]?.id;
+    if (nextStep) setSelectedStepId(nextStep);
+    setTab("training");
+  };
+
+  const selectSession = (session: TrainingPlan) => {
+    setActivePlan(session);
+    setSelectedStepId(session.steps.find((step) => !step.completed)?.id ?? session.steps[0]?.id ?? "");
+    setTab("training");
+  };
+
+  const completeStep = async (stepId: string) => {
+    const nextPlan = {
+      ...activePlan,
+      steps: activePlan.steps.map((step) => step.id === stepId ? { ...step, completed: true } : step),
+    };
+    setActivePlan(nextPlan);
+    await saveTrainingPlan(nextPlan);
+    setSessionHistory(await listTrainingPlans());
+    const nextStep = nextPlan.steps.find((step) => !step.completed);
+    if (nextStep) setSelectedStepId(nextStep.id);
+  };
+
   const title = useMemo(() => navigation.find((item) => item.id === tab)?.label, [tab]);
+  const remainingSteps = activePlan.steps.filter((step) => !step.completed).length;
 
   return (
     <div className="app-shell">
       <aside className="sidebar">
         <a className="brand" href="#today" onClick={() => setTab("today")}><span>♞</span><div><strong>ChessCoach</strong><small>Votre jeu. Votre plan.</small></div></a>
-        <nav aria-label="Navigation principale">{navigation.map((item) => <button key={item.id} type="button" className={tab === item.id ? "active" : ""} onClick={() => setTab(item.id)}><span>{item.icon}</span>{item.label}{item.id === "today" && <i>3</i>}</button>)}</nav>
+        <nav aria-label="Navigation principale">{navigation.map((item) => <button key={item.id} type="button" className={tab === item.id ? "active" : ""} onClick={() => setTab(item.id)}><span>{item.icon}</span>{item.label}{item.id === "today" && remainingSteps > 0 && <i>{remainingSteps}</i>}</button>)}</nav>
         <div className="sidebar-goal"><span>Objectif blitz</span><div><strong>1373</strong><b>/ 1500</b></div><div className="goal-meter"><span style={{ width: "58%" }} /></div><small>127 points à gagner</small></div>
         <div className="sidebar-profile"><span>VC</span><div><strong>Vincent</strong><small>@vincentito</small></div><button aria-label="Réglages">···</button></div>
       </aside>
@@ -259,9 +409,19 @@ export function ChessCoachApp() {
           <div className="top-actions"><span className={`connection ${online ? "" : "offline"}`}>{online ? "Synchronisé" : "Mode hors ligne"}</span>{installPrompt && <button className="install-button" type="button" onClick={() => installPrompt.prompt()}>Installer l’app</button>}<div className="streak"><span>♨</span><strong>4</strong><small>jours</small></div><span className="avatar">VC</span></div>
         </header>
         <div className="content">
-          {tab === "today" && <TodayView onStart={() => setTab("training")} />}
+          {tab === "today" && <TodayView plan={activePlan} onStart={startSession} />}
           {tab === "play" && <div className="play-layout"><div><span className="eyebrow">Partie d’entraînement</span><h1>Jouez contre votre coach</h1><p className="lead">Stockfish 18 Lite fonctionne aussi hors ligne. Le niveau s’adapte, sans jouer des coups absurdes.</p><ChessBoardPanel /></div><aside className="panel play-coach"><div className="coach-avatar">♞</div><h2>Contrat de la partie</h2><p>Avant chaque coup calme, formulez un plan en une phrase : pire pièce, faiblesse cible, échange utile.</p><div className="contract-item"><span>Focus</span><strong>Milieu de jeu</strong></div><div className="contract-item"><span>Cadence mentale</span><strong>2 candidats</strong></div><div className="contract-item"><span>Analyse</span><strong>Après la partie</strong></div></aside></div>}
-          {tab === "training" && <TrainingView />}
+          {tab === "training" && (
+            <TrainingView
+              plan={activePlan}
+              program={trainingProgram}
+              history={sessionHistory}
+              selectedStepId={selectedStepId}
+              onSelectStep={setSelectedStepId}
+              onSelectSession={selectSession}
+              onComplete={completeStep}
+            />
+          )}
           {tab === "games" && <GamesView />}
           {tab === "progress" && <ProgressView />}
         </div>

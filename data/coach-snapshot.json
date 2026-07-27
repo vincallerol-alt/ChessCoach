@@ -1,0 +1,781 @@
+{
+  "generatedAt": "2026-07-27T18:28:14.082Z",
+  "analysis": {
+    "engine": "Stockfish 18 Lite",
+    "runtime": "WASM local",
+    "gamesAnalyzed": 50,
+    "positionsFlagged": 295,
+    "lookbackDays": 90,
+    "lastGameAt": "2026-07-27T14:54:08.000Z",
+    "guardrail": "focus-updated"
+  },
+  "profile": {
+    "id": "vincentito",
+    "chessComUsername": "vincentito",
+    "displayName": "Vincent",
+    "blitzRating": 1373,
+    "blitzPeak": 1501,
+    "targetRating": 1500,
+    "dailyMinutes": 20,
+    "skillRatings": {
+      "openings": 1362,
+      "tactics": 1281,
+      "strategy": 1311,
+      "endgames": 1345,
+      "time": 1319
+    },
+    "strengths": [
+      "Stabiliser la sortie d’ouverture",
+      "Convertir les finales techniques"
+    ],
+    "focusAreas": [
+      "Vérification tactique avant de jouer",
+      "Construire un plan en milieu de jeu"
+    ],
+    "latestGameCount": 50
+  },
+  "signals": [
+    {
+      "id": "weekly-tactics",
+      "area": "tactics",
+      "label": "Vérification tactique avant de jouer",
+      "recurrence": 0.8050847457627118,
+      "evaluationLoss": 1,
+      "recency": 0.9983479834104938,
+      "timePressure": 0,
+      "failedAttempts": 0.5,
+      "priority": 0.7814
+    },
+    {
+      "id": "weekly-strategy",
+      "area": "strategy",
+      "label": "Construire un plan en milieu de jeu",
+      "recurrence": 1,
+      "evaluationLoss": 0.30550387596899226,
+      "recency": 0.9983479834104938,
+      "timePressure": 0.046511627906976744,
+      "failedAttempts": 0.44,
+      "priority": 0.6747
+    },
+    {
+      "id": "weekly-time",
+      "area": "time",
+      "label": "Décider sous pression",
+      "recurrence": 0.17796610169491525,
+      "evaluationLoss": 1,
+      "recency": 0.9961019700360082,
+      "timePressure": 1,
+      "failedAttempts": 0.34,
+      "priority": 0.6455
+    },
+    {
+      "id": "weekly-endgames",
+      "area": "endgames",
+      "label": "Convertir les finales techniques",
+      "recurrence": 0.03389830508474576,
+      "evaluationLoss": 1,
+      "recency": 0.9613360235339506,
+      "timePressure": 0.75,
+      "failedAttempts": 0.25,
+      "priority": 0.5541
+    },
+    {
+      "id": "weekly-openings",
+      "area": "openings",
+      "label": "Stabiliser la sortie d’ouverture",
+      "recurrence": 0.3898305084745763,
+      "evaluationLoss": 0.5251449275362319,
+      "recency": 0.9983479834104938,
+      "timePressure": 0,
+      "failedAttempts": 0.25,
+      "priority": 0.4924
+    }
+  ],
+  "exercises": [
+    {
+      "id": "personal-4304b356-89c5-11f1-8642-1b772601000f-40",
+      "title": "Votre position critique de la semaine",
+      "area": "tactics",
+      "fen": "7r/pp2kpp1/2n1p3/2q5/1b6/1Q2PKB1/PR3PPP/8 b - - 2 20",
+      "sideToMove": "black",
+      "expectedMoves": [
+        "c5h5"
+      ],
+      "explanation": "Vous avez joué c5d5. Cherchez d’abord le meilleur candidat sans moteur, puis comparez avec c5h5.",
+      "source": "personal",
+      "sourceUrl": "https://www.chess.com/game/live/172150815152",
+      "dueAt": "2026-07-28T18:28:14.082Z",
+      "intervalDays": 1,
+      "centipawnLoss": 600
+    },
+    {
+      "id": "personal-d1756c6d-893d-11f1-b114-9524c701000f-21",
+      "title": "Vérification tactique avant de jouer",
+      "area": "tactics",
+      "fen": "r3k1nr/ppp2ppp/3b4/3Nq3/4P3/5Q2/PPP2PPP/R1B1K2R w KQkq - 3 11",
+      "sideToMove": "white",
+      "expectedMoves": [
+        "c1f4"
+      ],
+      "explanation": "Vous avez joué e1g1. Cherchez d’abord le meilleur candidat sans moteur, puis comparez avec c1f4.",
+      "source": "personal",
+      "sourceUrl": "https://www.chess.com/game/live/172123398738",
+      "dueAt": "2026-07-29T18:28:14.082Z",
+      "intervalDays": 1,
+      "centipawnLoss": 600
+    },
+    {
+      "id": "personal-0727f8f3-8913-11f1-8e1f-7d7daa01000f-49",
+      "title": "Vérification tactique avant de jouer",
+      "area": "tactics",
+      "fen": "3r2k1/p2qp2p/1p4pB/2p5/2P5/8/P1P2r2/2K3RR w - - 0 25",
+      "sideToMove": "white",
+      "expectedMoves": [
+        "h6e3"
+      ],
+      "explanation": "Vous avez joué a2a3. Cherchez d’abord le meilleur candidat sans moteur, puis comparez avec h6e3.",
+      "source": "personal",
+      "sourceUrl": "https://www.chess.com/game/live/172112193244",
+      "dueAt": "2026-07-30T18:28:14.082Z",
+      "intervalDays": 1,
+      "centipawnLoss": 600
+    },
+    {
+      "id": "personal-0727f8f3-8913-11f1-8e1f-7d7daa01000f-51",
+      "title": "Vérification tactique avant de jouer",
+      "area": "tactics",
+      "fen": "3r2k1/p3p2p/1p4pB/2p5/2Pq4/P7/2P2r2/2K3RR w - - 1 26",
+      "sideToMove": "white",
+      "expectedMoves": [
+        "c1b1"
+      ],
+      "explanation": "Vous avez joué g1d1. Cherchez d’abord le meilleur candidat sans moteur, puis comparez avec c1b1.",
+      "source": "personal",
+      "sourceUrl": "https://www.chess.com/game/live/172112193244",
+      "dueAt": "2026-07-31T18:28:14.082Z",
+      "intervalDays": 1,
+      "centipawnLoss": 600
+    },
+    {
+      "id": "personal-6a78bc46-8912-11f1-8e1f-7d7daa01000f-55",
+      "title": "Vérification tactique avant de jouer",
+      "area": "tactics",
+      "fen": "4r3/p3r1pp/2k5/1p2B3/2pK4/2P1R2P/PP4P1/8 w - - 4 28",
+      "sideToMove": "white",
+      "expectedMoves": [
+        "e3e4"
+      ],
+      "explanation": "Vous avez joué e5f4. Cherchez d’abord le meilleur candidat sans moteur, puis comparez avec e3e4.",
+      "source": "personal",
+      "sourceUrl": "https://www.chess.com/game/live/172112009702",
+      "dueAt": "2026-08-01T18:28:14.082Z",
+      "intervalDays": 1,
+      "centipawnLoss": 600
+    },
+    {
+      "id": "personal-1a9c5c48-8911-11f1-8817-a0dc1301000f-43",
+      "title": "Vérification tactique avant de jouer",
+      "area": "tactics",
+      "fen": "r3q1k1/pR3p1p/2n5/5pN1/3p1P2/8/P1P3PP/4rRK1 w - - 0 22",
+      "sideToMove": "white",
+      "expectedMoves": [
+        "b7b3"
+      ],
+      "explanation": "Vous avez joué b7f7. Cherchez d’abord le meilleur candidat sans moteur, puis comparez avec b7b3.",
+      "source": "personal",
+      "sourceUrl": "https://www.chess.com/game/live/172111611906",
+      "dueAt": "2026-08-02T18:28:14.082Z",
+      "intervalDays": 1,
+      "centipawnLoss": 600
+    }
+  ],
+  "program": {
+    "id": "vincentito-2026-07-27-14d",
+    "startDate": "2026-07-27",
+    "endDate": "2026-08-09",
+    "sourceGameCount": 50,
+    "sessions": [
+      {
+        "id": "vincentito-2026-07-27",
+        "date": "2026-07-27",
+        "durationMinutes": 20,
+        "sessionKind": "training",
+        "focus": "tactics",
+        "headline": "Vérification tactique avant de jouer",
+        "rationale": "Cette séance consolide vérification tactique avant de jouer à partir des positions récentes.",
+        "playMission": "Pendant la partie, verbalisez deux candidats et contrôlez la réponse adverse avant chaque coup critique.",
+        "steps": [
+          {
+            "id": "replay",
+            "kind": "replay",
+            "title": "Rejouer une erreur personnelle",
+            "minutes": 4,
+            "completed": false
+          },
+          {
+            "id": "review",
+            "kind": "review",
+            "title": "Révision espacée",
+            "minutes": 4,
+            "completed": false
+          },
+          {
+            "id": "exercise",
+            "kind": "exercise",
+            "title": "Votre position critique de la semaine",
+            "minutes": 5,
+            "completed": false
+          },
+          {
+            "id": "mini-game",
+            "kind": "mini-game",
+            "title": "Mini-partie depuis la position critique",
+            "minutes": 5,
+            "completed": false
+          },
+          {
+            "id": "summary",
+            "kind": "summary",
+            "title": "Bilan et mission Chess.com",
+            "minutes": 2,
+            "completed": false
+          }
+        ]
+      },
+      {
+        "id": "vincentito-2026-07-28",
+        "date": "2026-07-28",
+        "durationMinutes": 20,
+        "sessionKind": "training",
+        "focus": "strategy",
+        "headline": "Construire un plan en milieu de jeu",
+        "rationale": "Cette séance consolide construire un plan en milieu de jeu à partir des positions récentes.",
+        "playMission": "Pendant la partie, verbalisez deux candidats et contrôlez la réponse adverse avant chaque coup critique.",
+        "steps": [
+          {
+            "id": "replay",
+            "kind": "replay",
+            "title": "Rejouer une erreur personnelle",
+            "minutes": 4,
+            "completed": false
+          },
+          {
+            "id": "review",
+            "kind": "review",
+            "title": "Révision espacée",
+            "minutes": 4,
+            "completed": false
+          },
+          {
+            "id": "exercise",
+            "kind": "exercise",
+            "title": "Vérification tactique avant de jouer",
+            "minutes": 5,
+            "completed": false
+          },
+          {
+            "id": "mini-game",
+            "kind": "mini-game",
+            "title": "Mini-partie depuis la position critique",
+            "minutes": 5,
+            "completed": false
+          },
+          {
+            "id": "summary",
+            "kind": "summary",
+            "title": "Bilan et mission Chess.com",
+            "minutes": 2,
+            "completed": false
+          }
+        ]
+      },
+      {
+        "id": "vincentito-2026-07-29",
+        "date": "2026-07-29",
+        "durationMinutes": 5,
+        "sessionKind": "match",
+        "focus": "time",
+        "headline": "Partie dirigée sur Chess.com",
+        "rationale": "Une partie réelle pour tester décider sous pression sans ajouter de fatigue d’entraînement.",
+        "playMission": "Pendant la partie, verbalisez deux candidats et contrôlez la réponse adverse avant chaque coup critique.",
+        "steps": [
+          {
+            "id": "review",
+            "kind": "review",
+            "title": "Relire la mission de jeu",
+            "minutes": 3,
+            "completed": false
+          },
+          {
+            "id": "summary",
+            "kind": "summary",
+            "title": "Noter le ressenti après la partie",
+            "minutes": 2,
+            "completed": false
+          }
+        ]
+      },
+      {
+        "id": "vincentito-2026-07-30",
+        "date": "2026-07-30",
+        "durationMinutes": 20,
+        "sessionKind": "training",
+        "focus": "tactics",
+        "headline": "Vérification tactique avant de jouer",
+        "rationale": "Cette séance consolide vérification tactique avant de jouer à partir des positions récentes.",
+        "playMission": "Pendant la partie, verbalisez deux candidats et contrôlez la réponse adverse avant chaque coup critique.",
+        "steps": [
+          {
+            "id": "replay",
+            "kind": "replay",
+            "title": "Rejouer une erreur personnelle",
+            "minutes": 4,
+            "completed": false
+          },
+          {
+            "id": "review",
+            "kind": "review",
+            "title": "Révision espacée",
+            "minutes": 4,
+            "completed": false
+          },
+          {
+            "id": "exercise",
+            "kind": "exercise",
+            "title": "Vérification tactique avant de jouer",
+            "minutes": 5,
+            "completed": false
+          },
+          {
+            "id": "mini-game",
+            "kind": "mini-game",
+            "title": "Mini-partie depuis la position critique",
+            "minutes": 5,
+            "completed": false
+          },
+          {
+            "id": "summary",
+            "kind": "summary",
+            "title": "Bilan et mission Chess.com",
+            "minutes": 2,
+            "completed": false
+          }
+        ]
+      },
+      {
+        "id": "vincentito-2026-07-31",
+        "date": "2026-07-31",
+        "durationMinutes": 20,
+        "sessionKind": "training",
+        "focus": "strategy",
+        "headline": "Construire un plan en milieu de jeu",
+        "rationale": "Cette séance consolide construire un plan en milieu de jeu à partir des positions récentes.",
+        "playMission": "Pendant la partie, verbalisez deux candidats et contrôlez la réponse adverse avant chaque coup critique.",
+        "steps": [
+          {
+            "id": "replay",
+            "kind": "replay",
+            "title": "Rejouer une erreur personnelle",
+            "minutes": 4,
+            "completed": false
+          },
+          {
+            "id": "review",
+            "kind": "review",
+            "title": "Révision espacée",
+            "minutes": 4,
+            "completed": false
+          },
+          {
+            "id": "exercise",
+            "kind": "exercise",
+            "title": "Vérification tactique avant de jouer",
+            "minutes": 5,
+            "completed": false
+          },
+          {
+            "id": "mini-game",
+            "kind": "mini-game",
+            "title": "Mini-partie depuis la position critique",
+            "minutes": 5,
+            "completed": false
+          },
+          {
+            "id": "summary",
+            "kind": "summary",
+            "title": "Bilan et mission Chess.com",
+            "minutes": 2,
+            "completed": false
+          }
+        ]
+      },
+      {
+        "id": "vincentito-2026-08-01",
+        "date": "2026-08-01",
+        "durationMinutes": 5,
+        "sessionKind": "match",
+        "focus": "time",
+        "headline": "Partie dirigée sur Chess.com",
+        "rationale": "Une partie réelle pour tester décider sous pression sans ajouter de fatigue d’entraînement.",
+        "playMission": "Pendant la partie, verbalisez deux candidats et contrôlez la réponse adverse avant chaque coup critique.",
+        "steps": [
+          {
+            "id": "review",
+            "kind": "review",
+            "title": "Relire la mission de jeu",
+            "minutes": 3,
+            "completed": false
+          },
+          {
+            "id": "summary",
+            "kind": "summary",
+            "title": "Noter le ressenti après la partie",
+            "minutes": 2,
+            "completed": false
+          }
+        ]
+      },
+      {
+        "id": "vincentito-2026-08-02",
+        "date": "2026-08-02",
+        "durationMinutes": 20,
+        "sessionKind": "training",
+        "focus": "tactics",
+        "headline": "Vérification tactique avant de jouer",
+        "rationale": "Cette séance consolide vérification tactique avant de jouer à partir des positions récentes.",
+        "playMission": "Pendant la partie, verbalisez deux candidats et contrôlez la réponse adverse avant chaque coup critique.",
+        "steps": [
+          {
+            "id": "replay",
+            "kind": "replay",
+            "title": "Rejouer une erreur personnelle",
+            "minutes": 4,
+            "completed": false
+          },
+          {
+            "id": "review",
+            "kind": "review",
+            "title": "Révision espacée",
+            "minutes": 4,
+            "completed": false
+          },
+          {
+            "id": "exercise",
+            "kind": "exercise",
+            "title": "Votre position critique de la semaine",
+            "minutes": 5,
+            "completed": false
+          },
+          {
+            "id": "mini-game",
+            "kind": "mini-game",
+            "title": "Mini-partie depuis la position critique",
+            "minutes": 5,
+            "completed": false
+          },
+          {
+            "id": "summary",
+            "kind": "summary",
+            "title": "Bilan et mission Chess.com",
+            "minutes": 2,
+            "completed": false
+          }
+        ]
+      },
+      {
+        "id": "vincentito-2026-08-03",
+        "date": "2026-08-03",
+        "durationMinutes": 20,
+        "sessionKind": "training",
+        "focus": "strategy",
+        "headline": "Construire un plan en milieu de jeu",
+        "rationale": "Cette séance consolide construire un plan en milieu de jeu à partir des positions récentes.",
+        "playMission": "Pendant la partie, verbalisez deux candidats et contrôlez la réponse adverse avant chaque coup critique.",
+        "steps": [
+          {
+            "id": "replay",
+            "kind": "replay",
+            "title": "Rejouer une erreur personnelle",
+            "minutes": 4,
+            "completed": false
+          },
+          {
+            "id": "review",
+            "kind": "review",
+            "title": "Révision espacée",
+            "minutes": 4,
+            "completed": false
+          },
+          {
+            "id": "exercise",
+            "kind": "exercise",
+            "title": "Vérification tactique avant de jouer",
+            "minutes": 5,
+            "completed": false
+          },
+          {
+            "id": "mini-game",
+            "kind": "mini-game",
+            "title": "Mini-partie depuis la position critique",
+            "minutes": 5,
+            "completed": false
+          },
+          {
+            "id": "summary",
+            "kind": "summary",
+            "title": "Bilan et mission Chess.com",
+            "minutes": 2,
+            "completed": false
+          }
+        ]
+      },
+      {
+        "id": "vincentito-2026-08-04",
+        "date": "2026-08-04",
+        "durationMinutes": 20,
+        "sessionKind": "training",
+        "focus": "time",
+        "headline": "Décider sous pression",
+        "rationale": "Cette séance consolide décider sous pression à partir des positions récentes.",
+        "playMission": "Pendant la partie, verbalisez deux candidats et contrôlez la réponse adverse avant chaque coup critique.",
+        "steps": [
+          {
+            "id": "replay",
+            "kind": "replay",
+            "title": "Rejouer une erreur personnelle",
+            "minutes": 4,
+            "completed": false
+          },
+          {
+            "id": "review",
+            "kind": "review",
+            "title": "Révision espacée",
+            "minutes": 4,
+            "completed": false
+          },
+          {
+            "id": "exercise",
+            "kind": "exercise",
+            "title": "Vérification tactique avant de jouer",
+            "minutes": 5,
+            "completed": false
+          },
+          {
+            "id": "mini-game",
+            "kind": "mini-game",
+            "title": "Mini-partie depuis la position critique",
+            "minutes": 5,
+            "completed": false
+          },
+          {
+            "id": "summary",
+            "kind": "summary",
+            "title": "Bilan et mission Chess.com",
+            "minutes": 2,
+            "completed": false
+          }
+        ]
+      },
+      {
+        "id": "vincentito-2026-08-05",
+        "date": "2026-08-05",
+        "durationMinutes": 5,
+        "sessionKind": "match",
+        "focus": "tactics",
+        "headline": "Partie dirigée sur Chess.com",
+        "rationale": "Une partie réelle pour tester vérification tactique avant de jouer sans ajouter de fatigue d’entraînement.",
+        "playMission": "Pendant la partie, verbalisez deux candidats et contrôlez la réponse adverse avant chaque coup critique.",
+        "steps": [
+          {
+            "id": "review",
+            "kind": "review",
+            "title": "Relire la mission de jeu",
+            "minutes": 3,
+            "completed": false
+          },
+          {
+            "id": "summary",
+            "kind": "summary",
+            "title": "Noter le ressenti après la partie",
+            "minutes": 2,
+            "completed": false
+          }
+        ]
+      },
+      {
+        "id": "vincentito-2026-08-06",
+        "date": "2026-08-06",
+        "durationMinutes": 20,
+        "sessionKind": "training",
+        "focus": "strategy",
+        "headline": "Construire un plan en milieu de jeu",
+        "rationale": "Cette séance consolide construire un plan en milieu de jeu à partir des positions récentes.",
+        "playMission": "Pendant la partie, verbalisez deux candidats et contrôlez la réponse adverse avant chaque coup critique.",
+        "steps": [
+          {
+            "id": "replay",
+            "kind": "replay",
+            "title": "Rejouer une erreur personnelle",
+            "minutes": 4,
+            "completed": false
+          },
+          {
+            "id": "review",
+            "kind": "review",
+            "title": "Révision espacée",
+            "minutes": 4,
+            "completed": false
+          },
+          {
+            "id": "exercise",
+            "kind": "exercise",
+            "title": "Vérification tactique avant de jouer",
+            "minutes": 5,
+            "completed": false
+          },
+          {
+            "id": "mini-game",
+            "kind": "mini-game",
+            "title": "Mini-partie depuis la position critique",
+            "minutes": 5,
+            "completed": false
+          },
+          {
+            "id": "summary",
+            "kind": "summary",
+            "title": "Bilan et mission Chess.com",
+            "minutes": 2,
+            "completed": false
+          }
+        ]
+      },
+      {
+        "id": "vincentito-2026-08-07",
+        "date": "2026-08-07",
+        "durationMinutes": 20,
+        "sessionKind": "training",
+        "focus": "time",
+        "headline": "Décider sous pression",
+        "rationale": "Cette séance consolide décider sous pression à partir des positions récentes.",
+        "playMission": "Pendant la partie, verbalisez deux candidats et contrôlez la réponse adverse avant chaque coup critique.",
+        "steps": [
+          {
+            "id": "replay",
+            "kind": "replay",
+            "title": "Rejouer une erreur personnelle",
+            "minutes": 4,
+            "completed": false
+          },
+          {
+            "id": "review",
+            "kind": "review",
+            "title": "Révision espacée",
+            "minutes": 4,
+            "completed": false
+          },
+          {
+            "id": "exercise",
+            "kind": "exercise",
+            "title": "Vérification tactique avant de jouer",
+            "minutes": 5,
+            "completed": false
+          },
+          {
+            "id": "mini-game",
+            "kind": "mini-game",
+            "title": "Mini-partie depuis la position critique",
+            "minutes": 5,
+            "completed": false
+          },
+          {
+            "id": "summary",
+            "kind": "summary",
+            "title": "Bilan et mission Chess.com",
+            "minutes": 2,
+            "completed": false
+          }
+        ]
+      },
+      {
+        "id": "vincentito-2026-08-08",
+        "date": "2026-08-08",
+        "durationMinutes": 5,
+        "sessionKind": "match",
+        "focus": "tactics",
+        "headline": "Partie dirigée sur Chess.com",
+        "rationale": "Une partie réelle pour tester vérification tactique avant de jouer sans ajouter de fatigue d’entraînement.",
+        "playMission": "Pendant la partie, verbalisez deux candidats et contrôlez la réponse adverse avant chaque coup critique.",
+        "steps": [
+          {
+            "id": "review",
+            "kind": "review",
+            "title": "Relire la mission de jeu",
+            "minutes": 3,
+            "completed": false
+          },
+          {
+            "id": "summary",
+            "kind": "summary",
+            "title": "Noter le ressenti après la partie",
+            "minutes": 2,
+            "completed": false
+          }
+        ]
+      },
+      {
+        "id": "vincentito-2026-08-09",
+        "date": "2026-08-09",
+        "durationMinutes": 20,
+        "sessionKind": "training",
+        "focus": "strategy",
+        "headline": "Construire un plan en milieu de jeu",
+        "rationale": "Cette séance consolide construire un plan en milieu de jeu à partir des positions récentes.",
+        "playMission": "Pendant la partie, verbalisez deux candidats et contrôlez la réponse adverse avant chaque coup critique.",
+        "steps": [
+          {
+            "id": "replay",
+            "kind": "replay",
+            "title": "Rejouer une erreur personnelle",
+            "minutes": 4,
+            "completed": false
+          },
+          {
+            "id": "review",
+            "kind": "review",
+            "title": "Révision espacée",
+            "minutes": 4,
+            "completed": false
+          },
+          {
+            "id": "exercise",
+            "kind": "exercise",
+            "title": "Vérification tactique avant de jouer",
+            "minutes": 5,
+            "completed": false
+          },
+          {
+            "id": "mini-game",
+            "kind": "mini-game",
+            "title": "Mini-partie depuis la position critique",
+            "minutes": 5,
+            "completed": false
+          },
+          {
+            "id": "summary",
+            "kind": "summary",
+            "title": "Bilan et mission Chess.com",
+            "minutes": 2,
+            "completed": false
+          }
+        ]
+      }
+    ]
+  },
+  "metrics": {
+    "currentRating": 1373,
+    "peakRating": 1501,
+    "weeklyDelta": 45,
+    "firstTrySuccess": 0.71,
+    "timePressureBlunderDelta": -0.18
+  }
+}

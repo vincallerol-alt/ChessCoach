@@ -83,7 +83,13 @@ export async function POST(request: Request) {
       // Local preview keeps the authoritative offline copy in IndexedDB.
     }
 
-    return Response.json({ games: imported, imported: imported.length, persisted, analyzedQueued: Math.min(300, imported.length) });
+    return Response.json({
+      games: imported,
+      imported: imported.length,
+      persisted,
+      analysisMode: "device",
+      analysisPending: Math.min(300, imported.length),
+    });
   } catch (error) {
     return Response.json({ error: error instanceof Error ? error.message : "Import impossible" }, { status: 500 });
   }

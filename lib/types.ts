@@ -81,9 +81,11 @@ export type TrainingPlan = {
   id: string;
   date: string;
   durationMinutes: number;
+  sessionKind?: "training" | "match";
   focus: SkillArea;
   headline: string;
   rationale: string;
+  playMission?: string;
   steps: Array<{
     id: string;
     kind: "replay" | "review" | "exercise" | "mini-game" | "summary";
@@ -91,6 +93,14 @@ export type TrainingPlan = {
     minutes: number;
     completed: boolean;
   }>;
+};
+
+export type TrainingProgram = {
+  id: string;
+  startDate: string;
+  endDate: string;
+  sourceGameCount: number;
+  sessions: TrainingPlan[];
 };
 
 export interface GameSourceAdapter {

@@ -1,11 +1,10 @@
 export async function GET() {
   return Response.json({
-    engine: "Stockfish 18",
-    strategy: "quick-all-then-deep-critical",
+    engine: "Stockfish 18 Lite",
+    runtime: "device-wasm",
+    strategy: "quick-local-then-critical-local",
     multiPv: 3,
-    queued: 0,
-    running: 0,
-    completed: 0,
-    workerConfigured: Boolean(process.env.ENGINE_API_URL),
+    serverRequired: false,
+    offlineCapable: true,
   });
 }

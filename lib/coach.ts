@@ -69,8 +69,8 @@ export class AdaptiveCoachPlanner implements CoachPlanner {
       headline: "Transformer une position égale en plan clair",
       rationale: `${focusSignal.label} est aujourd’hui le levier le plus rentable pour viser ${profile.targetRating}.`,
       steps: [
-        { id: "replay", kind: "replay", title: "Rejouer une erreur personnelle", minutes: 4, completed: true },
-        { id: "review", kind: "review", title: "Révision espacée", minutes: 4, completed: true },
+        { id: "replay", kind: "replay", title: "Rejouer une erreur personnelle", minutes: 4, completed: false },
+        { id: "review", kind: "review", title: "Révision espacée", minutes: 4, completed: false },
         { id: "exercise", kind: "exercise", title: "Plans de milieu de jeu", minutes: 5, completed: false },
         { id: "mini-game", kind: "mini-game", title: "Mini-partie sous pression", minutes: 5, completed: false },
         { id: "summary", kind: "summary", title: "Bilan et prochain rappel", minutes: 2, completed: false },

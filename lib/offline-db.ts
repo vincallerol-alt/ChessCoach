@@ -17,6 +17,12 @@ class ChessCoachDatabase extends Dexie {
       plans: "id, date, focus",
       settings: "key",
     });
+    this.version(2).stores({
+      games: "id, sourceId, playedAt, timeClass, result, analyzed",
+      attempts: "id, exerciseId, createdAt, synced",
+      plans: "id, date, focus",
+      settings: "key",
+    }).upgrade((transaction) => transaction.table("plans").clear());
   }
 }
 
@@ -28,6 +34,18 @@ export async function queueAttempt(attempt: Attempt) {
 
 export async function cacheGames(games: Game[]) {
   await offlineDb.games.bulkPut(games);
+}
+
+export async function loadTrainingPlan(id: string) {
+  return offlineDb.plans.get(id);
+}
+
+export async function saveTrainingPlan(plan: TrainingPlan) {
+  await offlineDb.plans.put(plan);
+}
+
+export async function listTrainingPlans() {
+  return offlineDb.plans.orderBy("date").reverse().toArray();
 }
 
 export async function unsyncedAttempts() {

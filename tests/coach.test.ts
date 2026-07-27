@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { AdaptiveCoachPlanner, defaultSignals, nextReviewDate, weaknessPriority } from "../lib/coach";
+import { createLocalId } from "../lib/ids";
 import type { PlayerProfile } from "../lib/types";
 
 const profile: PlayerProfile = {
@@ -20,11 +21,19 @@ describe("coach adaptatif", () => {
     expect(plan.durationMinutes).toBe(20);
     expect(plan.steps.reduce((sum, step) => sum + step.minutes, 0)).toBe(20);
     expect(plan.focus).toBe("strategy");
+    expect(plan.steps.every((step) => step.completed === false)).toBe(true);
   });
 
   it("avance ou réinitialise la répétition espacée", () => {
     const date = new Date("2026-07-27T00:00:00Z");
     expect(nextReviewDate(date, 3, true).toISOString().slice(0, 10)).toBe("2026-08-02");
     expect(nextReviewDate(date, 14, false).toISOString().slice(0, 10)).toBe("2026-07-28");
+  });
+
+  it("crée un identifiant compatible sans dépendre de randomUUID", () => {
+    const first = createLocalId("attempt");
+    const second = createLocalId("attempt");
+    expect(first).toMatch(/^attempt-/);
+    expect(second).not.toBe(first);
   });
 });

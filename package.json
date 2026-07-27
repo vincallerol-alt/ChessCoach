@@ -5,6 +5,10 @@
   "engines": {
     "node": ">=22.13.0"
   },
+  "overrides": {
+    "postcss": "8.5.23",
+    "sharp": "0.35.3"
+  },
   "scripts": {
     "dev": "vinext dev",
     "dev:mobile": "vinext dev --hostname 0.0.0.0 --port 4173",
@@ -13,19 +17,16 @@
     "test": "vitest run --config vitest.config.ts && npm run build && node --test tests/rendered-html.test.mjs",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next --ignore-pattern public/engine",
     "db:generate": "drizzle-kit generate",
-    "engine": "node --import tsx server/index.ts"
+    "coach:refresh": "node scripts/coach-refresh.mjs"
   },
   "dependencies": {
     "chess.js": "^1.4.0",
     "dexie": "^4.4.4",
     "drizzle-orm": "0.45.2",
-    "fastify": "^5.6.2",
-    "next": "16.2.6",
+    "next": "^16.2.12",
     "react": "19.2.6",
     "react-chessboard": "^5.10.0",
-    "react-dom": "19.2.6",
-    "react-loading-skeleton": "3.5.0",
-    "stockfish": "^18.0.8"
+    "react-dom": "19.2.6"
   },
   "devDependencies": {
     "@cloudflare/vite-plugin": "1.37.1",
@@ -41,7 +42,6 @@
     "eslint-config-next": "16.2.6",
     "react-server-dom-webpack": "19.2.6",
     "tailwindcss": "4.2.1",
-    "tsx": "^4.20.3",
     "typescript": "5.9.3",
     "vinext": "0.0.50",
     "vite": "8.0.13",

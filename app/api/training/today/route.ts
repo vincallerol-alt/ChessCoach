@@ -1,20 +1,18 @@
-import { AdaptiveCoachPlanner, defaultSignals } from "../../../../lib/coach";
-import type { PlayerProfile } from "../../../../lib/types";
-
-const profile: PlayerProfile = {
-  id: "vincentito",
-  chessComUsername: "vincentito",
-  displayName: "Vincent",
-  blitzRating: 1373,
-  blitzPeak: 1501,
-  targetRating: 1500,
-  dailyMinutes: 20,
-  skillRatings: { openings: 1300, tactics: 1350, strategy: 1250, endgames: 1400, time: 1280 },
-  strengths: ["Finales", "Scandinave avec les Noirs"],
-  focusAreas: ["Plans de milieu de jeu", "Décisions sous pression"],
-};
+import type { PlayerProfile, TrainingProgram, WeaknessSignal } from "../../../../lib/types";
+import coachSnapshot from "../../../../data/coach-snapshot.json";
 
 export async function GET() {
-  const plan = new AdaptiveCoachPlanner().buildDailyPlan(profile, defaultSignals, new Date());
-  return Response.json({ profile, signals: defaultSignals, plan });
+  const profile = coachSnapshot.profile as PlayerProfile;
+  const signals = coachSnapshot.signals as WeaknessSignal[];
+  const program = coachSnapshot.program as TrainingProgram;
+  const today = new Date().toISOString().slice(0, 10);
+  const plan = program.sessions.find((session) => session.date === today) ?? program.sessions[0];
+  return Response.json({
+    profile,
+    signals,
+    exercises: coachSnapshot.exercises,
+    analysis: coachSnapshot.analysis,
+    program,
+    plan,
+  });
 }
