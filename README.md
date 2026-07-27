@@ -1,26 +1,26 @@
-# SauveParent
+# ChessCoach
 
-MVP React Native/Expo d'un compagnon vocal audio-first pour enfants.
+PWA mobile-first de coaching d’échecs personnel. La séance quotidienne de 20 minutes combine erreurs personnelles, répétition espacée, exercices ciblés, mini-partie et bilan.
 
-## Lancer
+## Démarrage
 
 ```bash
 npm install
-npm run start
+npm run dev
 ```
 
-Puis ouvrir l'app avec Expo Go, un simulateur iOS/Android, ou le mode web.
+- Application PWA : Vinext/React 19, TypeScript, `react-chessboard`, `chess.js`, Dexie.
+- Données : import public Chess.com, cache IndexedDB et stockage D1 multi-utilisateur.
+- Jeu hors ligne : Stockfish 18 Lite single-threaded WASM (GPLv3, licence incluse dans `public/engine/COPYING.txt`).
+- Analyse lourde : service Fastify dans `server/`, à lancer avec `STOCKFISH_PATH` pointant vers un binaire Stockfish 18 complet.
 
-## MVP inclus
+## Commandes
 
-- Configuration parent : age reel, prenom, duree, voix, themes, apprentissages, sujets interdits.
-- Session enfant : l'agent demande l'age, l'humeur, le style d'histoire et le heros.
-- Age parent prioritaire : si l'enfant donne un age incoherent, l'agent repond avec humour doux sans accusation.
-- Agent babysitter : bienveillant, poli, legerement educatif.
-- Audio-first : synthese vocale via `expo-speech`, bouton d'interruption, ecran enfant minimal.
-- Garde-fous : sujets interdits, mots sensibles, transformation douce vers une idee acceptable.
-- Resume parent : scenario, themes, alertes.
+```bash
+npm test
+npm run lint
+npm run db:generate
+npm run engine
+```
 
-## Limite volontaire
-
-Le STT et le LLM temps reel sont isoles derriere la logique de session mais pas encore branches. Cette version valide le parcours, le ton, les garde-fous et l'experience mobile avant d'ajouter une API vocale temps reel.
+La couche `CoachNarrator` est déterministe au MVP. Elle peut être remplacée plus tard par un coach Codex/OpenAI sans modifier l’analyse Stockfish ni l’algorithme de planification.

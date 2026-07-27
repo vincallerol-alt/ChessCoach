@@ -1,34 +1,51 @@
 {
-  "name": "sauveparent",
+  "name": "chesscoach",
   "version": "0.1.0",
   "private": true,
-  "main": "expo/AppEntry",
+  "engines": {
+    "node": ">=22.13.0"
+  },
   "scripts": {
-    "start": "expo start",
-    "android": "expo start --android",
-    "ios": "expo start --ios",
-    "web": "expo start --web",
-    "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "dev": "vinext dev",
+    "build": "vinext build",
+    "start": "vinext start",
+    "test": "vitest run --config vitest.config.ts && npm run build && node --test tests/rendered-html.test.mjs",
+    "lint": "eslint . --ignore-pattern dist --ignore-pattern .next --ignore-pattern public/engine",
+    "db:generate": "drizzle-kit generate",
+    "engine": "node --import tsx server/index.ts"
   },
   "dependencies": {
-    "@expo/metro-runtime": "~4.0.1",
-    "@expo/vector-icons": "~14.0.4",
-    "expo": "~52.0.0",
-    "expo-asset": "~11.0.5",
-    "expo-font": "~13.0.4",
-    "expo-linear-gradient": "~14.0.2",
-    "expo-speech": "~13.0.1",
-    "expo-status-bar": "~2.0.0",
-    "react": "18.3.1",
-    "react-dom": "18.3.1",
-    "react-native": "0.76.9",
-    "react-native-safe-area-context": "4.12.0",
-    "react-native-web": "~0.19.13"
+    "chess.js": "^1.4.0",
+    "dexie": "^4.4.4",
+    "drizzle-orm": "0.45.2",
+    "fastify": "^5.6.2",
+    "next": "16.2.6",
+    "react": "19.2.6",
+    "react-chessboard": "^5.10.0",
+    "react-dom": "19.2.6",
+    "react-loading-skeleton": "3.5.0",
+    "stockfish": "^18.0.8"
   },
   "devDependencies": {
-    "@types/react": "~18.3.12",
-    "typescript": "~5.3.3",
-    "vitest": "^2.1.8"
-  }
+    "@cloudflare/vite-plugin": "1.37.1",
+    "@cloudflare/workers-types": "^4.20260702.1",
+    "@tailwindcss/postcss": "4.2.1",
+    "@types/node": "22.19.19",
+    "@types/react": "19.2.14",
+    "@types/react-dom": "19.2.3",
+    "@vitejs/plugin-react": "6.0.2",
+    "@vitejs/plugin-rsc": "0.5.26",
+    "drizzle-kit": "0.31.10",
+    "eslint": "9.39.4",
+    "eslint-config-next": "16.2.6",
+    "react-server-dom-webpack": "19.2.6",
+    "tailwindcss": "4.2.1",
+    "tsx": "^4.20.3",
+    "typescript": "5.9.3",
+    "vinext": "0.0.50",
+    "vite": "8.0.13",
+    "vitest": "^3.2.4",
+    "wrangler": "4.92.0"
+  },
+  "type": "module"
 }
