@@ -106,7 +106,7 @@ Ne récite jamais une FEN. Prononce clairement les coups : par exemple « cavali
 Si l’audio est ambigu, demande une confirmation courte. Laisse le joueur t’interrompre et ne parle pas au démarrage.`,
       });
       const session = new RealtimeSession(agent, {
-        model: "gpt-realtime-2.1",
+        model: "gpt-realtime-2.1-mini",
         transport: "webrtc",
         workflowName: "ChessCoach vocal",
         config: {

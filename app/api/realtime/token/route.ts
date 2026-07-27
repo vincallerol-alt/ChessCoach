@@ -1,4 +1,4 @@
-const REALTIME_MODEL = "gpt-realtime-2.1";
+const REALTIME_MODEL = "gpt-realtime-2.1-mini";
 const SAFETY_IDENTIFIER = "fe818e9ff0d75debc771813ba5335ef4b274d2a6d6430dca9664658e30248f3";
 
 type ClientSecretResponse = {

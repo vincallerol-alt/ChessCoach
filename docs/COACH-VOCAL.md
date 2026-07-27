@@ -4,7 +4,7 @@ ChessCoach utilise une session OpenAI Realtime speech-to-speech via WebRTC. Cett
 
 ## Qualité
 
-- modèle `gpt-realtime-2.1` avec raisonnement faible pour équilibrer pédagogie et latence ;
+- modèle `gpt-realtime-2.1-mini` avec raisonnement faible pour réduire le coût tout en conservant une conversation fluide ;
 - voix `marin`, ton calme et réponses courtes ;
 - transcription française enrichie avec le vocabulaire échiquéen ;
 - réduction du bruit de proximité et détection sémantique des tours de parole ;
