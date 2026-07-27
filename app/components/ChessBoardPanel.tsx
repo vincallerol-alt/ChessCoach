@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Chess, type Square } from "chess.js";
 import { Chessboard } from "react-chessboard";
 import { StockfishLiteAdapter } from "../../lib/stockfish-lite";
+import type { BotGameSummary } from "../../lib/types";
 
 type BoardMode = "bot" | "exercise";
 
@@ -12,6 +13,7 @@ type Props = {
   fen?: string;
   expectedMove?: string;
   onExerciseResult?: (correct: boolean, move: string) => void;
+  onGameComplete?: (game: BotGameSummary) => void;
 };
 
 const timeControls = {
@@ -38,7 +40,7 @@ const formatClock = (milliseconds: number) => {
   return `${minutes}:${seconds.toString().padStart(2, "0")}`;
 };
 
-export function ChessBoardPanel({ mode = "bot", fen, expectedMove = "e1c1", onExerciseResult }: Props) {
+export function ChessBoardPanel({ mode = "bot", fen, expectedMove = "e1c1", onExerciseResult, onGameComplete }: Props) {
   const gameRef = useRef(new Chess(fen ?? (mode === "exercise" ? coachPosition : undefined)));
   const engineRef = useRef<StockfishLiteAdapter | null>(null);
   const [position, setPosition] = useState(() => new Chess(fen ?? (mode === "exercise" ? coachPosition : undefined)).fen());
@@ -50,7 +52,30 @@ export function ChessBoardPanel({ mode = "bot", fen, expectedMove = "e1c1", onEx
   const [clocks, setClocks] = useState<ClockState>({ white: 300_000, black: 300_000 });
   const [clockRunning, setClockRunning] = useState(false);
   const timedOutRef = useRef(false);
+  const completedGameRef = useRef(false);
+  const [hasStarted, setHasStarted] = useState(false);
+  const [gameCompleted, setGameCompleted] = useState(false);
+  const [exerciseLocked, setExerciseLocked] = useState(false);
   const activeTurn = useMemo(() => new Chess(position).turn(), [position]);
+
+  const finishGame = useCallback((result: BotGameSummary["result"]) => {
+    if (mode !== "bot" || completedGameRef.current) return;
+    completedGameRef.current = true;
+    setGameCompleted(true);
+    setClockRunning(false);
+    const timeClass = timeControl === "3+2" || timeControl === "5+0"
+      ? "blitz"
+      : timeControl === "10+0" || timeControl === "15+10"
+        ? "rapid"
+        : "other";
+    onGameComplete?.({
+      pgn: gameRef.current.pgn(),
+      result,
+      timeClass,
+      timeControl,
+      playedAt: new Date().toISOString(),
+    });
+  }, [mode, onGameComplete, timeControl]);
 
   useEffect(() => {
     if (mode !== "bot") return;
@@ -74,12 +99,13 @@ export function ChessBoardPanel({ mode = "bot", fen, expectedMove = "e1c1", onEx
           timedOutRef.current = true;
           setClockRunning(false);
           setStatus(active === "white" ? "Temps écoulé — le coach gagne" : "Temps écoulé — vous gagnez");
+          window.setTimeout(() => finishGame(active === "white" ? "loss" : "win"), 0);
         }
         return { ...current, [active]: remaining };
       });
     }, 200);
     return () => window.clearInterval(timer);
-  }, [clockRunning, mode, timeControl]);
+  }, [clockRunning, finishGame, mode, timeControl]);
 
   const legalTargets = useMemo(() => {
     if (!selected) return [] as Square[];
@@ -119,11 +145,14 @@ export function ChessBoardPanel({ mode = "bot", fen, expectedMove = "e1c1", onEx
     setClocks((current) => ({ ...current, black: current.black + timeControls[timeControl].incrementMs }));
     setPosition(gameRef.current.fen());
     setStatus(gameRef.current.isGameOver() ? "Partie terminée" : "À vous de jouer");
-    if (gameRef.current.isGameOver()) setClockRunning(false);
-  }, [fallbackMove, skill, timeControl]);
+    if (gameRef.current.isGameOver()) {
+      const result = gameRef.current.isDraw() ? "draw" : gameRef.current.turn() === "w" ? "loss" : "win";
+      finishGame(result);
+    }
+  }, [fallbackMove, finishGame, skill, timeControl]);
 
   const tryMove = useCallback((source: Square, target: Square) => {
-    if (timedOutRef.current || (mode === "bot" && gameRef.current.turn() !== "w")) return false;
+    if (timedOutRef.current || exerciseLocked || (mode === "bot" && gameRef.current.turn() !== "w")) return false;
     let move;
     try {
       move = gameRef.current.move({ from: source, to: target, promotion: "q" });
@@ -136,17 +165,25 @@ export function ChessBoardPanel({ mode = "bot", fen, expectedMove = "e1c1", onEx
     setSelected(null);
     if (mode === "exercise") {
       const correct = uci.startsWith(expectedMove);
-      setStatus(correct ? "Excellent — le roque active aussi la tour." : "Coup légal, mais cherche l’activation du roi et de la tour.");
+      setExerciseLocked(true);
+      setStatus(correct ? "Excellent — meilleur candidat trouvé." : "Ce coup ne répond pas au problème. Demandez un indice ou réessayez.");
       onExerciseResult?.(correct, uci);
     } else {
+      setHasStarted(true);
       setClocks((current) => ({ ...current, white: current.white + timeControls[timeControl].incrementMs }));
       setClockRunning(true);
-      window.setTimeout(playBot, 180);
+      if (gameRef.current.isGameOver()) {
+        const result = gameRef.current.isDraw() ? "draw" : gameRef.current.turn() === "w" ? "loss" : "win";
+        finishGame(result);
+      } else {
+        window.setTimeout(playBot, 180);
+      }
     }
     return true;
-  }, [expectedMove, mode, onExerciseResult, playBot, timeControl]);
+  }, [exerciseLocked, expectedMove, finishGame, mode, onExerciseResult, playBot, timeControl]);
 
   const onSquareClick = useCallback(({ square }: { square: string }) => {
+    if (exerciseLocked) return;
     const target = square as Square;
     if (selected) {
       if (tryMove(selected, target)) return;
@@ -154,17 +191,21 @@ export function ChessBoardPanel({ mode = "bot", fen, expectedMove = "e1c1", onEx
     }
     const piece = gameRef.current.get(target);
     if (piece && piece.color === gameRef.current.turn()) setSelected(target);
-  }, [selected, tryMove]);
+  }, [exerciseLocked, selected, tryMove]);
 
   const reset = () => {
     gameRef.current = new Chess(fen ?? (mode === "exercise" ? coachPosition : undefined));
     setPosition(gameRef.current.fen());
     setSelected(null);
     setStatus(mode === "bot" ? "À vous de jouer" : exerciseStatus(fen));
+    setExerciseLocked(false);
     const initial = timeControls[timeControl].initialMs ?? 0;
     setClocks({ white: initial, black: initial });
     setClockRunning(false);
     timedOutRef.current = false;
+    completedGameRef.current = false;
+    setHasStarted(false);
+    setGameCompleted(false);
   };
 
   const changeTimeControl = (next: TimeControl) => {
@@ -173,10 +214,19 @@ export function ChessBoardPanel({ mode = "bot", fen, expectedMove = "e1c1", onEx
     setClocks({ white: initial, black: initial });
     setClockRunning(false);
     timedOutRef.current = false;
+    completedGameRef.current = false;
+    setHasStarted(false);
+    setGameCompleted(false);
     gameRef.current = new Chess();
     setPosition(gameRef.current.fen());
     setSelected(null);
     setStatus("À vous de jouer");
+  };
+
+  const resign = () => {
+    if (!hasStarted || completedGameRef.current) return;
+    setStatus("Partie abandonnée — enregistrée dans votre historique");
+    finishGame("loss");
   };
 
   return (
@@ -189,7 +239,12 @@ export function ChessBoardPanel({ mode = "bot", fen, expectedMove = "e1c1", onEx
             ? `Stockfish 18 Lite · niveau ${skill}`
             : `${new Chess(position).turn() === "w" ? "Blancs" : "Noirs"} au trait`}</small>
         </div>
-        <button className="icon-button" type="button" onClick={reset} aria-label="Recommencer">↻</button>
+        <div className="board-actions">
+          {mode === "bot" && hasStarted && !gameCompleted && (
+            <button className="resign-button" type="button" onClick={resign}>Abandonner</button>
+          )}
+          <button className="icon-button" type="button" onClick={reset} aria-label="Recommencer">↻</button>
+        </div>
       </div>
       {mode === "bot" && timeControl !== "unlimited" && (
         <div className="chess-clocks" aria-label="Pendules">
@@ -210,7 +265,7 @@ export function ChessBoardPanel({ mode = "bot", fen, expectedMove = "e1c1", onEx
           canDragPiece: ({ square }) => {
             if (!square) return false;
             const piece = gameRef.current.get(square as Square);
-            return Boolean(!timedOutRef.current && piece && piece.color === gameRef.current.turn() && (mode !== "bot" || piece.color === "w"));
+            return Boolean(!timedOutRef.current && !exerciseLocked && piece && piece.color === gameRef.current.turn() && (mode !== "bot" || piece.color === "w"));
           },
           squareStyles,
           darkSquareStyle: { backgroundColor: "#769656" },

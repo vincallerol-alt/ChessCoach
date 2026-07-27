@@ -15,7 +15,7 @@ export type PlayerProfile = {
 
 export type Game = {
   id: string;
-  source: "chess.com" | "pgn";
+  source: "chess.com" | "pgn" | "chesscoach";
   sourceId: string;
   playedAt: string;
   timeClass: "bullet" | "blitz" | "rapid" | "daily" | "other";
@@ -28,6 +28,14 @@ export type Game = {
   pgn: string;
   url?: string;
   analyzed: boolean;
+};
+
+export type BotGameSummary = {
+  pgn: string;
+  result: Game["result"];
+  timeClass: Game["timeClass"];
+  timeControl: string;
+  playedAt: string;
 };
 
 export type PositionAnalysis = {
@@ -65,6 +73,7 @@ export type Exercise = {
   sourceUrl?: string;
   dueAt: string;
   intervalDays: number;
+  centipawnLoss?: number;
 };
 
 export type Attempt = {

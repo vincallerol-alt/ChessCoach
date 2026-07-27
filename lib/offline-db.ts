@@ -36,6 +36,10 @@ export async function cacheGames(games: Game[]) {
   await offlineDb.games.bulkPut(games);
 }
 
+export async function listCachedGames() {
+  return offlineDb.games.orderBy("playedAt").reverse().toArray();
+}
+
 export async function loadTrainingPlan(id: string) {
   return offlineDb.plans.get(id);
 }

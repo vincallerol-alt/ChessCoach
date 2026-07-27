@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { Chess } from "chess.js";
 import { AdaptiveCoachPlanner, defaultSignals, DeterministicCoachNarrator } from "../lib/coach";
 import { createLocalId } from "../lib/ids";
-import { cacheGames, listTrainingPlans, loadTrainingPlan, queueAttempt, saveTrainingPlan, syncPendingAttempts } from "../lib/offline-db";
-import type { Exercise, Game, PlayerProfile, TrainingPlan, TrainingProgram, WeaknessSignal } from "../lib/types";
+import { cacheGames, listCachedGames, listTrainingPlans, loadTrainingPlan, queueAttempt, saveTrainingPlan, syncPendingAttempts } from "../lib/offline-db";
+import type { BotGameSummary, Exercise, Game, PlayerProfile, TrainingPlan, TrainingProgram, WeaknessSignal } from "../lib/types";
 import coachSnapshot from "../data/coach-snapshot.json";
 import { ChessBoardPanel } from "./components/ChessBoardPanel";
 
@@ -132,6 +132,7 @@ function TrainingView({
   onSelectStep,
   onSelectSession,
   onComplete,
+  onGameComplete,
 }: {
   plan: TrainingPlan;
   program: TrainingProgram;
@@ -140,30 +141,66 @@ function TrainingView({
   onSelectStep: (stepId: string) => void;
   onSelectSession: (plan: TrainingPlan) => void;
   onComplete: (stepId: string) => Promise<void>;
+  onGameComplete: (game: BotGameSummary) => Promise<void>;
 }) {
-  const [feedback, setFeedback] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<{ message: string; stage: number; reveal: boolean } | null>(null);
+  const [failedAttempts, setFailedAttempts] = useState(0);
+  const [exerciseCycle, setExerciseCycle] = useState(0);
+  const attemptStartedAt = useRef(0);
   const selectedStep = plan.steps.find((step) => step.id === selectedStepId) ?? plan.steps[0];
   const completed = plan.steps.filter((step) => step.completed).length;
+
+  useEffect(() => {
+    attemptStartedAt.current = Date.now();
+  }, []);
+
   const handleResult = async (correct: boolean, move: string) => {
-    setFeedback(correct
-      ? "Position comprise. Elle reviendra dans 3 jours."
-      : `À revoir demain : ${primaryExercise.explanation}`);
+    const nextFailure = correct ? failedAttempts : failedAttempts + 1;
+    if (correct) {
+      setFeedback({ message: "Exact. Le candidat répond au problème immédiat de la position.", stage: 0, reveal: false });
+    } else if (nextFailure === 1) {
+      setFeedback({
+        message: `Votre coup ${move} est légal, mais ne résout pas le problème principal. Revenez à la position et contrôlez la meilleure réponse adverse.`,
+        stage: 1,
+        reveal: false,
+      });
+    } else if (nextFailure === 2) {
+      setFeedback({
+        message: narrator.explain(primaryExercise.area, { move, evaluationLoss: primaryExercise.centipawnLoss }),
+        stage: 2,
+        reveal: false,
+      });
+    } else {
+      setFeedback({
+        message: `${primaryExercise.explanation} Principe à retenir : ${narrator.explain(primaryExercise.area, { move, evaluationLoss: primaryExercise.centipawnLoss })}`,
+        stage: 3,
+        reveal: true,
+      });
+    }
+    setFailedAttempts(nextFailure);
     await queueAttempt({
       id: createLocalId("attempt"),
       exerciseId: primaryExercise.id,
       move,
       correct,
-      responseMs: 0,
+      responseMs: Date.now() - attemptStartedAt.current,
       createdAt: new Date().toISOString(),
       synced: false,
     });
     if (correct) await onComplete(selectedStep.id);
   };
 
+  const retryExercise = () => {
+    setFeedback(null);
+    setExerciseCycle((cycle) => cycle + 1);
+    attemptStartedAt.current = Date.now();
+  };
+
   const stepContent = () => {
     if (selectedStep.kind === "exercise" || selectedStep.kind === "replay") {
       return (
         <ChessBoardPanel
+          key={`${primaryExercise.id}-${exerciseCycle}`}
           mode="exercise"
           fen={primaryExercise.fen}
           expectedMove={primaryExercise.expectedMoves[0]}
@@ -175,7 +212,9 @@ function TrainingView({
       return (
         <>
           <p className="lead">Jouez une partie courte contre Stockfish Lite. La pendule et la force sont réglables sous l’échiquier.</p>
-          <ChessBoardPanel />
+          <ChessBoardPanel onGameComplete={(game) => {
+            void onGameComplete(game).then(() => onComplete(selectedStep.id));
+          }} />
           <button className="primary-button complete-step" type="button" onClick={() => onComplete(selectedStep.id)}>
             Terminer la mini-partie
           </button>
@@ -207,7 +246,9 @@ function TrainingView({
         <div>
           <span className="eyebrow">Étape {plan.steps.indexOf(selectedStep) + 1} sur {plan.steps.length} · {plan.focus}</span>
           <h1>{selectedStep.title}</h1>
-          <p className="lead">{selectedStep.kind === "exercise" || selectedStep.kind === "replay" ? primaryExercise.explanation : plan.rationale}</p>
+          <p className="lead">{selectedStep.kind === "exercise" || selectedStep.kind === "replay"
+            ? "Trouvez le meilleur candidat sans moteur. Le coach donnera un retour progressif après votre coup."
+            : plan.rationale}</p>
           {stepContent()}
         </div>
         <aside className="panel exercise-coach">
@@ -223,7 +264,18 @@ function TrainingView({
               </button>
             ))}
           </div>
-          {feedback && <div className="feedback" role="status">{feedback}</div>}
+          {feedback && (
+            <div className="feedback" role="status">
+              <strong>{feedback.stage === 1 ? "À vous de rejouer" : feedback.stage === 2 ? "Indice du coach" : feedback.reveal ? "Solution expliquée" : "Bien joué"}</strong>
+              <p>{feedback.message}</p>
+              {feedback.stage > 0 && !feedback.reveal && (
+                <button className="secondary-button" type="button" onClick={retryExercise}>Réessayer la position</button>
+              )}
+              {feedback.reveal && (
+                <button className="primary-button" type="button" onClick={() => onComplete(selectedStep.id)}>J’ai compris, continuer</button>
+              )}
+            </div>
+          )}
         </aside>
       </div>
 
@@ -267,6 +319,9 @@ function GamesView() {
   const [games, setGames] = useState<Game[]>([]);
   const [syncing, setSyncing] = useState(false);
   const [message, setMessage] = useState("Analyse prioritaire : 300 dernières parties rapid/blitz");
+  useEffect(() => {
+    listCachedGames().then(setGames).catch(() => undefined);
+  }, []);
   const sync = async () => {
     setSyncing(true);
     setMessage("Import incrémental depuis Chess.com…");
@@ -274,8 +329,8 @@ function GamesView() {
       const response = await fetch("/api/chesscom/import", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ username: profile.chessComUsername, limit: 300 }) });
       if (!response.ok) throw new Error("sync");
       const data = await response.json() as { games: Game[]; imported: number };
-      setGames(data.games);
       await cacheGames(data.games);
+      setGames(await listCachedGames());
       setMessage(`${data.imported} parties disponibles · doublons ignorés`);
     } catch {
       setMessage("Hors ligne : vos parties en cache restent accessibles.");
@@ -312,7 +367,7 @@ function GamesView() {
         <div className="table-head"><span>Partie</span><span>Cadence</span><span>Résultat</span><span>Analyse</span></div>
         {(games.length ? games.slice(0, 12) : demoGames).map((game) => (
 
-          <div className="table-row" key={game.id}><span><strong>{game.white} – {game.black}</strong><small>{new Date(game.playedAt).toLocaleDateString("fr-FR")}</small></span><span>{game.timeClass}</span><span className={`result ${game.result}`}>{game.result === "win" ? "Victoire" : game.result === "loss" ? "Défaite" : "Nulle"}</span><span>{game.analyzed ? "✓ Prête" : "En attente"}</span></div>
+          <div className="table-row" key={game.id}><span><strong>{game.white} – {game.black}</strong><small>{new Date(game.playedAt).toLocaleDateString("fr-FR")} · {game.source === "chesscoach" ? "ChessCoach" : game.source === "pgn" ? "PGN" : "Chess.com"}</small></span><span>{game.timeClass}</span><span className={`result ${game.result}`}>{game.result === "win" ? "Victoire" : game.result === "loss" ? "Défaite" : "Nulle"}</span><span>{game.analyzed ? "✓ Prête" : game.source === "chesscoach" ? "À analyser" : "En attente"}</span></div>
         ))}
       </section>
     </div>
@@ -391,6 +446,24 @@ export function ChessCoachApp() {
     if (nextStep) setSelectedStepId(nextStep.id);
   };
 
+  const recordBotGame = async (summary: BotGameSummary) => {
+    const sourceId = createLocalId("bot");
+    const game: Game = {
+      id: `chesscoach-${sourceId}`,
+      source: "chesscoach",
+      sourceId,
+      playedAt: summary.playedAt,
+      timeClass: summary.timeClass,
+      playerColor: "white",
+      result: summary.result,
+      white: profile.chessComUsername,
+      black: `ChessCoach · Stockfish Lite ${summary.timeControl}`,
+      pgn: summary.pgn,
+      analyzed: false,
+    };
+    await cacheGames([game]);
+  };
+
   const title = useMemo(() => navigation.find((item) => item.id === tab)?.label, [tab]);
   const remainingSteps = activePlan.steps.filter((step) => !step.completed).length;
 
@@ -410,9 +483,10 @@ export function ChessCoachApp() {
         </header>
         <div className="content">
           {tab === "today" && <TodayView plan={activePlan} onStart={startSession} />}
-          {tab === "play" && <div className="play-layout"><div><span className="eyebrow">Partie d’entraînement</span><h1>Jouez contre votre coach</h1><p className="lead">Stockfish 18 Lite fonctionne aussi hors ligne. Le niveau s’adapte, sans jouer des coups absurdes.</p><ChessBoardPanel /></div><aside className="panel play-coach"><div className="coach-avatar">♞</div><h2>Contrat de la partie</h2><p>Avant chaque coup calme, formulez un plan en une phrase : pire pièce, faiblesse cible, échange utile.</p><div className="contract-item"><span>Focus</span><strong>Milieu de jeu</strong></div><div className="contract-item"><span>Cadence mentale</span><strong>2 candidats</strong></div><div className="contract-item"><span>Analyse</span><strong>Après la partie</strong></div></aside></div>}
+          {tab === "play" && <div className="play-layout"><div><span className="eyebrow">Partie d’entraînement</span><h1>Jouez contre votre coach</h1><p className="lead">Stockfish 18 Lite fonctionne aussi hors ligne. Chaque partie terminée ou abandonnée rejoint votre historique.</p><ChessBoardPanel onGameComplete={(game) => { void recordBotGame(game); }} /></div><aside className="panel play-coach"><div className="coach-avatar">♞</div><h2>Contrat de la partie</h2><p>Avant chaque coup calme, formulez un plan en une phrase : pire pièce, faiblesse cible, échange utile.</p><div className="contract-item"><span>Focus</span><strong>Milieu de jeu</strong></div><div className="contract-item"><span>Cadence mentale</span><strong>2 candidats</strong></div><div className="contract-item"><span>Historique</span><strong>Automatique</strong></div></aside></div>}
           {tab === "training" && (
             <TrainingView
+              key={`${activePlan.id}-${selectedStepId}`}
               plan={activePlan}
               program={trainingProgram}
               history={sessionHistory}
@@ -420,6 +494,7 @@ export function ChessCoachApp() {
               onSelectStep={setSelectedStepId}
               onSelectSession={selectSession}
               onComplete={completeStep}
+              onGameComplete={recordBotGame}
             />
           )}
           {tab === "games" && <GamesView />}

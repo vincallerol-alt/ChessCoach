@@ -27,7 +27,7 @@ flowchart LR
 |---|---|---|
 | PWA | Échiquier, séance, installation | Expérience tactile et rapide |
 | Stockfish Lite | Bot et analyse personnelle | Aucun coût de serveur d’échecs |
-| IndexedDB | Cache local, progression et historique de séances | Utilisable sans réseau, sans fausse progression |
+| IndexedDB | Cache local, progression, séances et parties Stockfish | Historique immédiat et utilisable sans réseau |
 | Worker + D1 | Synchronisation et données durables | Continuité entre appareils |
 | Codex planifié | Revue hebdomadaire des parties | Programme qui évolue sans sur-réagir |
 | IA narrative | Explications du coach, plus tard | Budget indépendant et plafonnable |
@@ -50,6 +50,8 @@ sequenceDiagram
     A->>D: Enregistre la tentative
     D-->>A: Synchronisation immédiate ou différée
 ```
+
+Une partie contre Stockfish terminée au mat, au temps ou par abandon est enregistrée localement avec son PGN, son résultat et sa cadence. Un exercice erroné reste verrouillé jusqu’au réessai ; la solution n’est révélée qu’au troisième échec.
 
 ## Flux de maintenance
 

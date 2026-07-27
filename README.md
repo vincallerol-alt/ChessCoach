@@ -7,6 +7,8 @@ PWA mobile-first de coaching d’échecs personnel pour `vincentito`. Elle propo
 - Stockfish 18 Lite/WASM uniquement, sur l’appareil : aucun serveur d’échecs.
 - Cloudflare Workers + D1 pour l’API et la persistance.
 - IndexedDB et service worker pour le mode hors ligne.
+- Les parties terminées ou abandonnées contre Stockfish Lite sont conservées dans l’historique local avec leur PGN, résultat et cadence.
+- Les exercices proposent un réessai, un indice au deuxième échec puis une solution expliquée au troisième.
 - Maintenance hebdomadaire par Codex, avec un minimum de 5 parties avant de changer le focus.
 - Les PGN et noms d’adversaires ne sont jamais enregistrés dans Git.
 
