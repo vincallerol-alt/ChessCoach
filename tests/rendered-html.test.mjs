@@ -5,7 +5,8 @@ import test from "node:test";
 test("production build contains ChessCoach and its PWA manifest", async () => {
   const manifest = JSON.parse(await readFile(new URL("../dist/client/manifest.webmanifest", import.meta.url), "utf8"));
   assert.equal(manifest.short_name, "ChessCoach");
-  assert.equal(manifest.display, "standalone");
+  assert.equal(manifest.display, "fullscreen");
+  assert.deepEqual(manifest.display_override, ["fullscreen", "standalone"]);
   assert.equal(manifest.icons.length, 2);
 
   const assetsUrl = new URL("../dist/client/assets/", import.meta.url);
@@ -18,4 +19,5 @@ test("production build contains ChessCoach and its PWA manifest", async () => {
 
   const worker = await readFile(new URL("../dist/server/index.js", import.meta.url), "utf8");
   assert.match(worker, /chesscom\/import/);
+  assert.match(worker, /api\/sync/);
 });

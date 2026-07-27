@@ -2,9 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Chess, type Square } from "chess.js";
-import { Chessboard } from "react-chessboard";
+import { Chessboard, type Arrow } from "react-chessboard";
 import { StockfishLiteAdapter } from "../../lib/stockfish-lite";
-import type { BotGameSummary } from "../../lib/types";
+import type { BotGameSummary, CriticalPosition, SkillArea } from "../../lib/types";
 
 type BoardMode = "bot" | "exercise";
 
@@ -14,6 +14,7 @@ type Props = {
   expectedMove?: string;
   onExerciseResult?: (correct: boolean, move: string) => void;
   onGameComplete?: (game: BotGameSummary) => void;
+  coachArrows?: Arrow[];
 };
 
 const timeControls = {
@@ -40,9 +41,12 @@ const formatClock = (milliseconds: number) => {
   return `${minutes}:${seconds.toString().padStart(2, "0")}`;
 };
 
-export function ChessBoardPanel({ mode = "bot", fen, expectedMove = "e1c1", onExerciseResult, onGameComplete }: Props) {
+export function ChessBoardPanel({ mode = "bot", fen, expectedMove = "e1c1", onExerciseResult, onGameComplete, coachArrows = [] }: Props) {
   const gameRef = useRef(new Chess(fen ?? (mode === "exercise" ? coachPosition : undefined)));
   const engineRef = useRef<StockfishLiteAdapter | null>(null);
+  const analysisEngineRef = useRef<StockfishLiteAdapter | null>(null);
+  const analysisQueueRef = useRef<Promise<CriticalPosition[]>>(Promise.resolve([]));
+  const analysisCountRef = useRef(0);
   const [position, setPosition] = useState(() => new Chess(fen ?? (mode === "exercise" ? coachPosition : undefined)).fen());
   const [selected, setSelected] = useState<Square | null>(null);
   const [status, setStatus] = useState(mode === "bot" ? "À vous de jouer" : exerciseStatus(fen));
@@ -56,6 +60,7 @@ export function ChessBoardPanel({ mode = "bot", fen, expectedMove = "e1c1", onEx
   const [hasStarted, setHasStarted] = useState(false);
   const [gameCompleted, setGameCompleted] = useState(false);
   const [exerciseLocked, setExerciseLocked] = useState(false);
+  const [moveHistory, setMoveHistory] = useState<string[]>([]);
   const activeTurn = useMemo(() => new Chess(position).turn(), [position]);
 
   const finishGame = useCallback((result: BotGameSummary["result"]) => {
@@ -63,27 +68,77 @@ export function ChessBoardPanel({ mode = "bot", fen, expectedMove = "e1c1", onEx
     completedGameRef.current = true;
     setGameCompleted(true);
     setClockRunning(false);
-    const timeClass = timeControl === "3+2" || timeControl === "5+0"
+    setStatus("Partie terminée · analyse locale en cours…");
+    const timeClass: BotGameSummary["timeClass"] = timeControl === "3+2" || timeControl === "5+0"
       ? "blitz"
       : timeControl === "10+0" || timeControl === "15+10"
         ? "rapid"
         : "other";
-    onGameComplete?.({
+    const summary = {
       pgn: gameRef.current.pgn(),
       result,
       timeClass,
       timeControl,
       playedAt: new Date().toISOString(),
+    };
+    void analysisQueueRef.current.then((positions) => {
+      onGameComplete?.({
+        ...summary,
+        criticalPositions: [...positions].sort((left, right) => right.centipawnLoss - left.centipawnLoss).slice(0, 3),
+      });
+      setStatus("Partie enregistrée · positions critiques prêtes");
+    }).catch(() => {
+      onGameComplete?.({ ...summary, criticalPositions: [] });
+      setStatus("Partie enregistrée");
     });
   }, [mode, onGameComplete, timeControl]);
 
   useEffect(() => {
     if (mode !== "bot") return;
     const engine = new StockfishLiteAdapter();
+    const analysisEngine = new StockfishLiteAdapter();
     engineRef.current = engine;
+    analysisEngineRef.current = analysisEngine;
     engine.ready().then(() => setEngineState("ready")).catch(() => setEngineState("fallback"));
-    return () => engine.dispose();
+    analysisEngine.ready().catch(() => undefined);
+    return () => {
+      engine.dispose();
+      analysisEngine.dispose();
+    };
   }, [mode]);
+
+  const queueMoveAnalysis = useCallback((beforeFen: string, afterFen: string, playedMove: string, ply: number, underTimePressure: boolean) => {
+    if (analysisCountRef.current >= 24) return;
+    analysisCountRef.current += 1;
+    const classify = (loss: number): SkillArea => {
+      if (underTimePressure) return "time";
+      if (ply <= 20) return "openings";
+      const pieceCount = beforeFen.split(" ")[0].replace(/[1-8/]/g, "").length;
+      if (pieceCount <= 10) return "endgames";
+      return loss >= 140 ? "tactics" : "strategy";
+    };
+    analysisQueueRef.current = analysisQueueRef.current.then(async (positions) => {
+      try {
+        await new Promise((resolve) => window.setTimeout(resolve, 550));
+        const engine = analysisEngineRef.current;
+        if (!engine) return positions;
+        const before = await engine.analyze(beforeFen, 8, 1);
+        const after = await engine.analyze(afterFen, 8, 1);
+        const loss = Math.max(0, Math.round(before.evaluationCp + after.evaluationCp));
+        if (before.bestMove === playedMove || loss < 60) return positions;
+        return [...positions, {
+          fen: beforeFen,
+          ply,
+          playedMove,
+          bestMove: before.bestMove,
+          centipawnLoss: loss,
+          area: classify(loss),
+        }];
+      } catch {
+        return positions;
+      }
+    });
+  }, []);
 
   useEffect(() => {
     if (mode !== "bot" || !clockRunning || timeControls[timeControl].initialMs === null) return;
@@ -144,6 +199,7 @@ export function ChessBoardPanel({ mode = "bot", fen, expectedMove = "e1c1", onEx
     if (timedOutRef.current) return;
     setClocks((current) => ({ ...current, black: current.black + timeControls[timeControl].incrementMs }));
     setPosition(gameRef.current.fen());
+    setMoveHistory(gameRef.current.history());
     setStatus(gameRef.current.isGameOver() ? "Partie terminée" : "À vous de jouer");
     if (gameRef.current.isGameOver()) {
       const result = gameRef.current.isDraw() ? "draw" : gameRef.current.turn() === "w" ? "loss" : "win";
@@ -154,6 +210,8 @@ export function ChessBoardPanel({ mode = "bot", fen, expectedMove = "e1c1", onEx
   const tryMove = useCallback((source: Square, target: Square) => {
     if (timedOutRef.current || exerciseLocked || (mode === "bot" && gameRef.current.turn() !== "w")) return false;
     let move;
+    const beforeFen = gameRef.current.fen();
+    const underTimePressure = mode === "bot" && timeControls[timeControl].initialMs !== null && clocks.white <= 30_000;
     try {
       move = gameRef.current.move({ from: source, to: target, promotion: "q" });
     } catch {
@@ -161,7 +219,9 @@ export function ChessBoardPanel({ mode = "bot", fen, expectedMove = "e1c1", onEx
     }
     if (!move) return false;
     const uci = `${source}${target}${move.promotion ?? ""}`;
-    setPosition(gameRef.current.fen());
+    const afterFen = gameRef.current.fen();
+    setPosition(afterFen);
+    setMoveHistory(gameRef.current.history());
     setSelected(null);
     if (mode === "exercise") {
       const correct = uci.startsWith(expectedMove);
@@ -170,6 +230,7 @@ export function ChessBoardPanel({ mode = "bot", fen, expectedMove = "e1c1", onEx
       onExerciseResult?.(correct, uci);
     } else {
       setHasStarted(true);
+      queueMoveAnalysis(beforeFen, afterFen, uci, gameRef.current.history().length, underTimePressure);
       setClocks((current) => ({ ...current, white: current.white + timeControls[timeControl].incrementMs }));
       setClockRunning(true);
       if (gameRef.current.isGameOver()) {
@@ -180,7 +241,7 @@ export function ChessBoardPanel({ mode = "bot", fen, expectedMove = "e1c1", onEx
       }
     }
     return true;
-  }, [exerciseLocked, expectedMove, finishGame, mode, onExerciseResult, playBot, timeControl]);
+  }, [clocks.white, exerciseLocked, expectedMove, finishGame, mode, onExerciseResult, playBot, queueMoveAnalysis, timeControl]);
 
   const onSquareClick = useCallback(({ square }: { square: string }) => {
     if (exerciseLocked) return;
@@ -199,11 +260,14 @@ export function ChessBoardPanel({ mode = "bot", fen, expectedMove = "e1c1", onEx
     setSelected(null);
     setStatus(mode === "bot" ? "À vous de jouer" : exerciseStatus(fen));
     setExerciseLocked(false);
+    setMoveHistory([]);
     const initial = timeControls[timeControl].initialMs ?? 0;
     setClocks({ white: initial, black: initial });
     setClockRunning(false);
     timedOutRef.current = false;
     completedGameRef.current = false;
+    analysisQueueRef.current = Promise.resolve([]);
+    analysisCountRef.current = 0;
     setHasStarted(false);
     setGameCompleted(false);
   };
@@ -215,6 +279,8 @@ export function ChessBoardPanel({ mode = "bot", fen, expectedMove = "e1c1", onEx
     setClockRunning(false);
     timedOutRef.current = false;
     completedGameRef.current = false;
+    analysisQueueRef.current = Promise.resolve([]);
+    analysisCountRef.current = 0;
     setHasStarted(false);
     setGameCompleted(false);
     gameRef.current = new Chess();
@@ -268,6 +334,8 @@ export function ChessBoardPanel({ mode = "bot", fen, expectedMove = "e1c1", onEx
             return Boolean(!timedOutRef.current && !exerciseLocked && piece && piece.color === gameRef.current.turn() && (mode !== "bot" || piece.color === "w"));
           },
           squareStyles,
+          arrows: coachArrows,
+          allowDrawingArrows: false,
           darkSquareStyle: { backgroundColor: "#769656" },
           lightSquareStyle: { backgroundColor: "#eeeed2" },
           boardStyle: { borderRadius: "8px", boxShadow: "0 16px 44px rgba(0,0,0,.28)", touchAction: "none" },
@@ -275,6 +343,11 @@ export function ChessBoardPanel({ mode = "bot", fen, expectedMove = "e1c1", onEx
           showNotation: true,
         }} />
       </div>
+      {mode === "bot" && moveHistory.length > 0 && (
+        <div className="move-strip" aria-label="Derniers coups">
+          {moveHistory.slice(-8).map((move, index) => <span key={`${move}-${index}`}>{move}</span>)}
+        </div>
+      )}
       <div className="board-status" aria-live="polite">
         <span>{status}</span>
         {mode === "bot" && (

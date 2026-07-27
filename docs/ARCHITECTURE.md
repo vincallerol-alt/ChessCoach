@@ -6,10 +6,10 @@
 flowchart LR
     U["Vincent · mobile ou Windows"] --> PWA["PWA ChessCoach"]
     PWA --> SW["Service worker · cache hors ligne"]
-    PWA --> IDB["IndexedDB · progression, séances et tentatives"]
+    PWA --> IDB["IndexedDB · cache hors ligne"]
     PWA --> SF["Stockfish 18 Lite/WASM · appareil"]
     PWA --> API["API Cloudflare Worker"]
-    API --> D1["D1 · profil, progression, tentatives"]
+    API --> D1["D1 · parties, séances, exercices et tentatives"]
     API --> CC["API publique Chess.com"]
 
     CODEX["Tâche Codex hebdomadaire"] --> JOB["coach:refresh"]
@@ -27,8 +27,8 @@ flowchart LR
 |---|---|---|
 | PWA | Échiquier, séance, installation | Expérience tactile et rapide |
 | Stockfish Lite | Bot et analyse personnelle | Aucun coût de serveur d’échecs |
-| IndexedDB | Cache local, progression, séances et parties Stockfish | Historique immédiat et utilisable sans réseau |
-| Worker + D1 | Synchronisation et données durables | Continuité entre appareils |
+| IndexedDB | Cache local des données D1 | Utilisable sans réseau |
+| Worker + D1 | Source durable des parties, séances, exercices et tentatives | Continuité entre appareils |
 | Codex planifié | Revue hebdomadaire des parties | Programme qui évolue sans sur-réagir |
 | IA narrative | Explications du coach, plus tard | Budget indépendant et plafonnable |
 
@@ -51,7 +51,27 @@ sequenceDiagram
     D-->>A: Synchronisation immédiate ou différée
 ```
 
-Une partie contre Stockfish terminée au mat, au temps ou par abandon est enregistrée localement avec son PGN, son résultat et sa cadence. Un exercice erroné reste verrouillé jusqu’au réessai ; la solution n’est révélée qu’au troisième échec.
+Une partie contre Stockfish terminée au mat, au temps ou par abandon est enregistrée avec son PGN, son résultat et sa cadence. Stockfish Lite analyse les coups du joueur sur l’appareil, conserve jusqu’à trois positions critiques et crée l’exercice prioritaire de la prochaine séance. IndexedDB reçoit immédiatement les données, puis D1 devient la source durable au retour du réseau.
+
+Un exercice erroné reste verrouillé jusqu’au réessai. Le premier échec affiche le coup joué, le deuxième donne un principe, et le troisième révèle une comparaison avec une flèche vers le meilleur coup.
+
+## Synchronisation multiappareil
+
+```mermaid
+sequenceDiagram
+    participant M as Mobile
+    participant I as IndexedDB
+    participant W as Worker
+    participant D as D1
+    participant P as Autre appareil
+
+    M->>I: Partie ou tentative hors ligne
+    M->>W: Retour du réseau
+    W->>D: Upsert des données utilisateur
+    P->>W: Ouverture de ChessCoach
+    W->>D: Lecture de l’état utilisateur
+    W-->>P: Parties, séances, exercices, tentatives
+```
 
 ## Flux de maintenance
 

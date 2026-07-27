@@ -9,6 +9,9 @@ PWA mobile-first de coaching d’échecs personnel pour `vincentito`. Elle propo
 - IndexedDB et service worker pour le mode hors ligne.
 - Les parties terminées ou abandonnées contre Stockfish Lite sont conservées dans l’historique local avec leur PGN, résultat et cadence.
 - Les exercices proposent un réessai, un indice au deuxième échec puis une solution expliquée au troisième.
+- Android lance la PWA installée en plein écran lorsque le système le permet.
+- D1 synchronise parties, séances, exercices et tentatives entre appareils ; IndexedDB sert de cache hors ligne.
+- Les parties Stockfish sont analysées localement et peuvent créer immédiatement un exercice personnel.
 - Maintenance hebdomadaire par Codex, avec un minimum de 5 parties avant de changer le focus.
 - Les PGN et noms d’adversaires ne sont jamais enregistrés dans Git.
 
@@ -38,5 +41,6 @@ npm run coach:refresh
 - [Installer la PWA sur téléphone](docs/INSTALLATION.md)
 - [Architecture et diagrammes de flux](docs/ARCHITECTURE.md)
 - [Maintenance planifiée avec Codex](docs/MAINTENANCE.md)
+- [Mobile, données réelles et synchronisation](docs/MOBILE-ET-DONNEES.md)
 
 La couche `EngineAdapter` permet d’ajouter Stockfish complet plus tard sans modifier le coach ni l’interface.

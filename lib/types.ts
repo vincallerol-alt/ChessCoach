@@ -28,6 +28,17 @@ export type Game = {
   pgn: string;
   url?: string;
   analyzed: boolean;
+  timeControl?: string;
+  criticalPositions?: CriticalPosition[];
+};
+
+export type CriticalPosition = {
+  fen: string;
+  ply: number;
+  playedMove: string;
+  bestMove: string;
+  centipawnLoss: number;
+  area: SkillArea;
 };
 
 export type BotGameSummary = {
@@ -36,6 +47,7 @@ export type BotGameSummary = {
   timeClass: Game["timeClass"];
   timeControl: string;
   playedAt: string;
+  criticalPositions: CriticalPosition[];
 };
 
 export type PositionAnalysis = {
@@ -74,6 +86,8 @@ export type Exercise = {
   dueAt: string;
   intervalDays: number;
   centipawnLoss?: number;
+  originGameId?: string;
+  comparisonMove?: string;
 };
 
 export type Attempt = {

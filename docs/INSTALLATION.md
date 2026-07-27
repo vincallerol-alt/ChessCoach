@@ -6,6 +6,8 @@
 2. Appuyer sur **Installer l’app** dans ChessCoach ou sur `⋮` puis **Installer l’application**.
 3. Confirmer. ChessCoach apparaît ensuite comme une application classique.
 
+ChessCoach demande désormais le mode `fullscreen`, avec un repli `standalone`. Sur Android compatible, l’application installée s’ouvre donc sans barre d’adresse Chrome. Une ancienne installation peut conserver son ancien mode : supprimer uniquement l’icône ChessCoach puis réinstaller la PWA. Les données synchronisées dans D1 seront restaurées.
+
 ## iPhone
 
 1. Ouvrir l’URL dans **Safari**.
@@ -24,3 +26,5 @@ Ouvrir l’URL dans Chrome ou Edge, puis cliquer sur l’icône d’installation
 4. Revenir en ligne puis utiliser **Parties → Synchroniser Chess.com**.
 
 Sur iPhone, l’installation doit être faite depuis Safari. Le bouton automatique d’installation est surtout disponible sur Android et Windows.
+
+iOS utilise le mode autonome mais conserve le contrôle de certaines zones système ; le plein écran total dépend de Safari/iOS.

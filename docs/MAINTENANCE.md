@@ -6,7 +6,7 @@ Chaque lundi à 07:00, heure de Paris. Une fréquence hebdomadaire évite de mod
 
 ## Travail exécuté
 
-1. Récupérer les 50 dernières parties rapid/blitz, dans une fenêtre maximale de 90 jours.
+1. Récupérer les 50 dernières parties rapid/blitz Chess.com, dans une fenêtre maximale de 90 jours.
 2. Rejouer les positions avec Stockfish 18 Lite/WASM.
 3. Calculer les priorités : récurrence 35 %, perte d’évaluation 25 %, récence 20 %, pression 10 %, exercices échoués 10 %.
 4. Conserver le focus existant si moins de 5 parties sont disponibles.
@@ -34,6 +34,8 @@ CHESSCOACH_NODES=8000
 - Stockfish Lite uniquement ; aucun container ou moteur distant.
 - Maximum 50 parties, 180 jours et 40 000 nœuds par position.
 - Aucun PGN, nom d’adversaire ou secret n’est écrit dans Git.
+- Les PGN ChessCoach restent dans D1/IndexedDB ; seuls les signaux et exercices dérivés peuvent rejoindre le snapshot versionné.
+- Les parties ChessCoach sont analysées immédiatement dans la PWA ; la tâche hebdomadaire consolide séparément l’historique Chess.com.
 - L’objectif Elo et le budget IA ne changent jamais automatiquement.
 - En cas d’échec des tests, la version en ligne reste intacte.
 

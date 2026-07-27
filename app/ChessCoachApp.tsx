@@ -2,10 +2,11 @@
 
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { Chess } from "chess.js";
-import { AdaptiveCoachPlanner, defaultSignals, DeterministicCoachNarrator } from "../lib/coach";
+import { AdaptiveCoachPlanner, defaultSignals, DeterministicCoachNarrator, weaknessPriority } from "../lib/coach";
+import { syncCloudState } from "../lib/cloud-sync";
 import { createLocalId } from "../lib/ids";
-import { cacheGames, listCachedGames, listTrainingPlans, loadTrainingPlan, queueAttempt, saveTrainingPlan, syncPendingAttempts } from "../lib/offline-db";
-import type { BotGameSummary, Exercise, Game, PlayerProfile, TrainingPlan, TrainingProgram, WeaknessSignal } from "../lib/types";
+import { cacheExercises, cacheGames, listAttempts, listCachedExercises, listCachedGames, listTrainingPlans, loadTrainingPlan, queueAttempt, saveTrainingPlan } from "../lib/offline-db";
+import type { Attempt, BotGameSummary, Exercise, Game, PlayerProfile, SkillArea, TrainingPlan, TrainingProgram, WeaknessSignal } from "../lib/types";
 import coachSnapshot from "../data/coach-snapshot.json";
 import { ChessBoardPanel } from "./components/ChessBoardPanel";
 
@@ -28,13 +29,26 @@ const todayIso = new Date().toISOString().slice(0, 10);
 const initialPlan = trainingProgram.sessions.find((session) => session.date === todayIso)
   ?? trainingProgram.sessions[0]
   ?? fallbackPlan;
-const primaryExercise = coachSnapshot.exercises[0] as Exercise;
-const demoGames = [
-  { id: "demo-1", white: "vincentito", black: "opponent_1420", playedAt: "2026-07-27T12:00:00.000Z", timeClass: "blitz", result: "win", analyzed: true },
-  { id: "demo-2", white: "opponent_1391", black: "vincentito", playedAt: "2026-07-26T12:00:00.000Z", timeClass: "blitz", result: "loss", analyzed: true },
-  { id: "demo-3", white: "vincentito", black: "opponent_1510", playedAt: "2026-07-25T12:00:00.000Z", timeClass: "rapid", result: "draw", analyzed: false },
-] as const;
+const snapshotExercise = coachSnapshot.exercises[0] as Exercise;
 const narrator = new DeterministicCoachNarrator();
+const skillLabels: Record<SkillArea, string> = {
+  openings: "Ouvertures",
+  tactics: "Tactique",
+  strategy: "Stratégie",
+  endgames: "Finales",
+  time: "Gestion du temps",
+};
+
+function signalsWithAttempts(signals: WeaknessSignal[], attempts: Attempt[], exercises: Exercise[]) {
+  const areaByExercise = new Map(exercises.map((exercise) => [exercise.id, exercise.area]));
+  return signals.map((signal) => {
+    const areaAttempts = attempts.filter((attempt) => areaByExercise.get(attempt.exerciseId) === signal.area);
+    if (!areaAttempts.length) return signal;
+    const failedAttempts = areaAttempts.filter((attempt) => !attempt.correct).length / areaAttempts.length;
+    const updated = { ...signal, failedAttempts };
+    return { ...updated, priority: weaknessPriority(updated) };
+  }).sort((left, right) => right.priority - left.priority);
+}
 
 const navigation: Array<{ id: Tab; label: string; icon: string }> = [
   { id: "today", label: "Aujourd’hui", icon: "⌂" },
@@ -62,8 +76,26 @@ function SkillMeter({ label, value, tone = "normal" }: { label: string; value: n
   );
 }
 
-function TodayView({ plan, onStart }: { plan: TrainingPlan; onStart: (stepId?: string) => void }) {
+function TodayView({
+  plan,
+  profile,
+  signals,
+  analyzedGames,
+  history,
+  onStart,
+}: {
+  plan: TrainingPlan;
+  profile: PlayerProfile;
+  signals: WeaknessSignal[];
+  analyzedGames: number;
+  history: TrainingPlan[];
+  onStart: (stepId?: string) => void;
+}) {
   const completed = plan.steps.filter((step) => step.completed).length;
+  const ratingGap = Math.max(0, profile.targetRating - profile.blitzRating);
+  const goalProgress = Math.min(100, Math.round(profile.blitzRating / profile.targetRating * 100));
+  const completedDays = new Set(history.filter((session) => session.steps.every((step) => step.completed)).map((session) => session.date));
+  const topSignal = signals[0];
   return (
     <div className="view-stack">
       <section className="hero-card">
@@ -97,27 +129,33 @@ function TodayView({ plan, onStart }: { plan: TrainingPlan; onStart: (stepId?: s
         <aside className="panel coach-note">
           <div className="coach-avatar">♞</div>
           <span className="eyebrow">Le conseil du coach</span>
-          <h2>Commencez par la position, pas par les coups.</h2>
-          <p>{narrator.explain("strategy", {})}</p>
-          <div className="quote-source"><span>Observation récurrente</span><strong>17 parties récentes</strong></div>
+          <h2>{topSignal ? `Priorité : ${topSignal.label}` : "Priorité en cours de calcul"}</h2>
+          <p>{narrator.explain(topSignal?.area ?? plan.focus, {})}</p>
+          <div className="quote-source"><span>Observation calculée</span><strong>{analyzedGames} parties analysées</strong></div>
         </aside>
       </section>
 
       <section className="lower-grid">
         <article className="panel">
           <div className="panel-heading"><div><span className="eyebrow">Profil de jeu</span><h2>Forces & axes de travail</h2></div><span className="updated">Mis à jour aujourd’hui</span></div>
-          <SkillMeter label="Finales" value={1400} tone="strong" />
-          <SkillMeter label="Tactique" value={1350} />
-          <SkillMeter label="Ouvertures" value={1300} />
-          <SkillMeter label="Stratégie" value={1250} tone="focus" />
-          <div className="strength-note"><span>Point fort</span><p>Scandinave avec les Noirs · 69 % de victoires sur l’échantillon récent.</p></div>
+          {(Object.entries(profile.skillRatings) as Array<[SkillArea, number]>).map(([area, rating]) => (
+            <SkillMeter key={area} label={skillLabels[area]} value={rating} tone={area === topSignal?.area ? "focus" : profile.strengths.some((strength) => strength.toLowerCase().includes(skillLabels[area].toLowerCase())) ? "strong" : "normal"} />
+          ))}
+          <div className="strength-note"><span>Point fort</span><p>{profile.strengths[0] ?? "Pas encore assez de données pour identifier un point fort stable."}</p></div>
         </article>
         <article className="panel goal-card">
           <span className="eyebrow">Objectif blitz</span>
           <div className="rating-line"><strong>{profile.blitzRating}</strong><span>→</span><b>{profile.targetRating}</b></div>
-          <div className="goal-meter"><span style={{ width: "58%" }} /></div>
-          <p><strong>+127 points</strong> pour retrouver puis stabiliser votre meilleur niveau.</p>
-          <div className="week-dots"><span>L</span><span className="hit">M</span><span className="hit">M</span><span className="today">J</span><span>V</span><span>S</span><span>D</span></div>
+          <div className="goal-meter"><span style={{ width: `${goalProgress}%` }} /></div>
+          <p><strong>{ratingGap} points</strong> pour atteindre votre objectif.</p>
+          <div className="week-dots">
+            {Array.from({ length: 7 }, (_, index) => {
+              const date = new Date();
+              date.setDate(date.getDate() - (6 - index));
+              const dateKey = date.toISOString().slice(0, 10);
+              return <span key={dateKey} className={`${completedDays.has(dateKey) ? "hit" : ""} ${dateKey === todayIso ? "today" : ""}`}>{date.toLocaleDateString("fr-FR", { weekday: "narrow" })}</span>;
+            })}
+          </div>
         </article>
       </section>
     </div>
@@ -133,6 +171,8 @@ function TrainingView({
   onSelectSession,
   onComplete,
   onGameComplete,
+  exercise,
+  onAttemptRecorded,
 }: {
   plan: TrainingPlan;
   program: TrainingProgram;
@@ -142,8 +182,10 @@ function TrainingView({
   onSelectSession: (plan: TrainingPlan) => void;
   onComplete: (stepId: string) => Promise<void>;
   onGameComplete: (game: BotGameSummary) => Promise<void>;
+  exercise: Exercise;
+  onAttemptRecorded: (correct: boolean) => Promise<void>;
 }) {
-  const [feedback, setFeedback] = useState<{ message: string; stage: number; reveal: boolean } | null>(null);
+  const [feedback, setFeedback] = useState<{ message: string; stage: number; reveal: boolean; move?: string } | null>(null);
   const [failedAttempts, setFailedAttempts] = useState(0);
   const [exerciseCycle, setExerciseCycle] = useState(0);
   const attemptStartedAt = useRef(0);
@@ -157,36 +199,40 @@ function TrainingView({
   const handleResult = async (correct: boolean, move: string) => {
     const nextFailure = correct ? failedAttempts : failedAttempts + 1;
     if (correct) {
-      setFeedback({ message: "Exact. Le candidat répond au problème immédiat de la position.", stage: 0, reveal: false });
+      setFeedback({ message: "Exact. Le candidat répond au problème immédiat de la position.", stage: 0, reveal: false, move });
     } else if (nextFailure === 1) {
       setFeedback({
         message: `Votre coup ${move} est légal, mais ne résout pas le problème principal. Revenez à la position et contrôlez la meilleure réponse adverse.`,
         stage: 1,
         reveal: false,
+        move,
       });
     } else if (nextFailure === 2) {
       setFeedback({
-        message: narrator.explain(primaryExercise.area, { move, evaluationLoss: primaryExercise.centipawnLoss }),
+        message: narrator.explain(exercise.area, { move, evaluationLoss: exercise.centipawnLoss }),
         stage: 2,
         reveal: false,
+        move,
       });
     } else {
       setFeedback({
-        message: `${primaryExercise.explanation} Principe à retenir : ${narrator.explain(primaryExercise.area, { move, evaluationLoss: primaryExercise.centipawnLoss })}`,
+        message: `${exercise.explanation} Principe à retenir : ${narrator.explain(exercise.area, { move, evaluationLoss: exercise.centipawnLoss })}`,
         stage: 3,
         reveal: true,
+        move,
       });
     }
     setFailedAttempts(nextFailure);
     await queueAttempt({
       id: createLocalId("attempt"),
-      exerciseId: primaryExercise.id,
+      exerciseId: exercise.id,
       move,
       correct,
       responseMs: Date.now() - attemptStartedAt.current,
       createdAt: new Date().toISOString(),
       synced: false,
     });
+    await onAttemptRecorded(correct);
     if (correct) await onComplete(selectedStep.id);
   };
 
@@ -200,11 +246,16 @@ function TrainingView({
     if (selectedStep.kind === "exercise" || selectedStep.kind === "replay") {
       return (
         <ChessBoardPanel
-          key={`${primaryExercise.id}-${exerciseCycle}`}
+          key={`${exercise.id}-${exerciseCycle}`}
           mode="exercise"
-          fen={primaryExercise.fen}
-          expectedMove={primaryExercise.expectedMoves[0]}
+          fen={exercise.fen}
+          expectedMove={exercise.expectedMoves[0]}
           onExerciseResult={handleResult}
+          coachArrows={feedback?.reveal
+            ? [{ startSquare: exercise.expectedMoves[0].slice(0, 2), endSquare: exercise.expectedMoves[0].slice(2, 4), color: "rgba(73, 151, 82, .9)" }]
+            : feedback?.stage === 1 && feedback.move
+              ? [{ startSquare: feedback.move.slice(0, 2), endSquare: feedback.move.slice(2, 4), color: "rgba(190, 76, 65, .86)" }]
+              : []}
         />
       );
     }
@@ -255,6 +306,24 @@ function TrainingView({
           <div className="coach-avatar">♞</div>
           <h2>Votre séance complète</h2>
           <p>{completed}/{plan.steps.length} étapes réellement terminées.</p>
+          {feedback && (
+            <div className="feedback" role="status">
+              <strong>{feedback.stage === 1 ? "À vous de rejouer" : feedback.stage === 2 ? "Indice du coach" : feedback.reveal ? "Solution expliquée" : "Bien joué"}</strong>
+              <p>{feedback.message}</p>
+              {feedback.reveal && (
+                <div className="move-comparison">
+                  <span>Votre coup <strong>{feedback.move ?? exercise.comparisonMove ?? "—"}</strong></span>
+                  <span>Meilleur coup <strong>{exercise.expectedMoves[0]}</strong></span>
+                </div>
+              )}
+              {feedback.stage > 0 && !feedback.reveal && (
+                <button className="secondary-button" type="button" onClick={retryExercise}>Réessayer la position</button>
+              )}
+              {feedback.reveal && (
+                <button className="primary-button" type="button" onClick={() => onComplete(selectedStep.id)}>J’ai compris, continuer</button>
+              )}
+            </div>
+          )}
           <div className="compact-steps">
             {plan.steps.map((step, index) => (
               <button key={step.id} className={`${step.id === selectedStep.id ? "active" : ""} ${step.completed ? "done" : ""}`} type="button" onClick={() => onSelectStep(step.id)}>
@@ -264,18 +333,6 @@ function TrainingView({
               </button>
             ))}
           </div>
-          {feedback && (
-            <div className="feedback" role="status">
-              <strong>{feedback.stage === 1 ? "À vous de rejouer" : feedback.stage === 2 ? "Indice du coach" : feedback.reveal ? "Solution expliquée" : "Bien joué"}</strong>
-              <p>{feedback.message}</p>
-              {feedback.stage > 0 && !feedback.reveal && (
-                <button className="secondary-button" type="button" onClick={retryExercise}>Réessayer la position</button>
-              )}
-              {feedback.reveal && (
-                <button className="primary-button" type="button" onClick={() => onComplete(selectedStep.id)}>J’ai compris, continuer</button>
-              )}
-            </div>
-          )}
         </aside>
       </div>
 
@@ -315,13 +372,16 @@ function TrainingView({
   );
 }
 
-function GamesView() {
+function GamesView({ onGamesChange }: { onGamesChange: (games: Game[]) => void }) {
   const [games, setGames] = useState<Game[]>([]);
   const [syncing, setSyncing] = useState(false);
   const [message, setMessage] = useState("Analyse prioritaire : 300 dernières parties rapid/blitz");
   useEffect(() => {
-    listCachedGames().then(setGames).catch(() => undefined);
-  }, []);
+    listCachedGames().then((items) => {
+      setGames(items);
+      onGamesChange(items);
+    }).catch(() => undefined);
+  }, [onGamesChange]);
   const sync = async () => {
     setSyncing(true);
     setMessage("Import incrémental depuis Chess.com…");
@@ -330,7 +390,9 @@ function GamesView() {
       if (!response.ok) throw new Error("sync");
       const data = await response.json() as { games: Game[]; imported: number };
       await cacheGames(data.games);
-      setGames(await listCachedGames());
+      const items = await listCachedGames();
+      setGames(items);
+      onGamesChange(items);
       setMessage(`${data.imported} parties disponibles · doublons ignorés`);
     } catch {
       setMessage("Hors ligne : vos parties en cache restent accessibles.");
@@ -353,6 +415,7 @@ function GamesView() {
       const game: Game = { id: `pgn-${sourceId}`, source: "pgn", sourceId, playedAt: new Date().toISOString(), timeClass: "other", playerColor: playerIsWhite ? "white" : "black", result, white: headers.White ?? "Blancs", black: headers.Black ?? "Noirs", pgn, analyzed: false };
       setGames((current) => [game, ...current]);
       await cacheGames([game]);
+      onGamesChange(await listCachedGames());
       setMessage("PGN importé et placé dans la file d’analyse.");
     } catch {
       setMessage("Ce fichier PGN n’est pas valide.");
@@ -365,7 +428,8 @@ function GamesView() {
       <section className="page-title"><div><span className="eyebrow">Bibliothèque personnelle</span><h1>Vos parties</h1><p>{message}</p></div><div className="page-actions"><label className="secondary-button">Importer un PGN<input type="file" accept=".pgn,application/x-chess-pgn" onChange={importPgn} hidden /></label><button className="primary-button" type="button" onClick={sync} disabled={syncing}>{syncing ? "Synchronisation…" : "Synchroniser Chess.com"}</button></div></section>
       <section className="panel games-table">
         <div className="table-head"><span>Partie</span><span>Cadence</span><span>Résultat</span><span>Analyse</span></div>
-        {(games.length ? games.slice(0, 12) : demoGames).map((game) => (
+        {games.length === 0 && <p className="empty-state">Aucune partie enregistrée. Jouez contre Stockfish ou synchronisez Chess.com.</p>}
+        {games.slice(0, 12).map((game) => (
 
           <div className="table-row" key={game.id}><span><strong>{game.white} – {game.black}</strong><small>{new Date(game.playedAt).toLocaleDateString("fr-FR")} · {game.source === "chesscoach" ? "ChessCoach" : game.source === "pgn" ? "PGN" : "Chess.com"}</small></span><span>{game.timeClass}</span><span className={`result ${game.result}`}>{game.result === "win" ? "Victoire" : game.result === "loss" ? "Défaite" : "Nulle"}</span><span>{game.analyzed ? "✓ Prête" : game.source === "chesscoach" ? "À analyser" : "En attente"}</span></div>
         ))}
@@ -374,16 +438,26 @@ function GamesView() {
   );
 }
 
-function ProgressView() {
-  const points = [1328, 1342, 1335, 1361, 1354, 1370, 1373];
+function ProgressView({ profile, attempts, games, signals }: { profile: PlayerProfile; attempts: Attempt[]; games: Game[]; signals: WeaknessSignal[] }) {
+  const firstAttempts = new Map<string, Attempt>();
+  [...attempts].sort((left, right) => left.createdAt.localeCompare(right.createdAt)).forEach((attempt) => {
+    if (!firstAttempts.has(attempt.exerciseId)) firstAttempts.set(attempt.exerciseId, attempt);
+  });
+  const firstTryRate = firstAttempts.size
+    ? Math.round([...firstAttempts.values()].filter((attempt) => attempt.correct).length / firstAttempts.size * 100)
+    : null;
+  const solvedRate = attempts.length ? Math.round(attempts.filter((attempt) => attempt.correct).length / attempts.length * 100) : null;
+  const botGames = games.filter((game) => game.source === "chesscoach");
+  const analyzedGames = games.filter((game) => game.analyzed).length;
+  const topSignal = signals[0];
   return (
     <div className="view-stack">
-      <section className="page-title"><div><span className="eyebrow">Progression</span><h1>Votre jeu devient plus stable</h1><p>Le coach mesure les compétences, pas seulement l’Elo.</p></div><div className="rating-badge"><strong>1373</strong><span>Blitz actuel</span></div></section>
+      <section className="page-title"><div><span className="eyebrow">Progression réelle</span><h1>Ce que vos données montrent</h1><p>Aucune statistique n’est simulée : les valeurs viennent de vos parties et tentatives.</p></div><div className="rating-badge"><strong>{profile.blitzRating}</strong><span>Blitz Chess.com</span></div></section>
       <section className="progress-grid">
-        <article className="panel chart-card"><div className="panel-heading"><div><span className="eyebrow">6 dernières semaines</span><h2>Rating blitz</h2></div><strong className="positive">+45</strong></div><div className="mini-chart">{points.map((point, index) => <span key={point + index} style={{ height: `${30 + (point - 1320) * 1.1}%` }}><i>{index === points.length - 1 ? point : ""}</i></span>)}</div></article>
-        <article className="panel"><span className="eyebrow">Ce qui progresse</span><h2>Décisions structurées</h2><div className="metric"><strong>71 %</strong><span>des exercices réussis au premier essai</span></div><div className="metric"><strong>−18 %</strong><span>d’erreurs graves sous 30 secondes</span></div></article>
+        <article className="panel"><span className="eyebrow">Volume observé</span><h2>Base d’apprentissage</h2><div className="metric"><strong>{games.length}</strong><span>parties synchronisées</span></div><div className="metric"><strong>{botGames.length}</strong><span>parties jouées contre ChessCoach</span></div><div className="metric"><strong>{analyzedGames}</strong><span>parties avec analyse disponible</span></div></article>
+        <article className="panel"><span className="eyebrow">Exercices</span><h2>Résultats enregistrés</h2><div className="metric"><strong>{firstTryRate === null ? "—" : `${firstTryRate} %`}</strong><span>réussis au premier essai</span></div><div className="metric"><strong>{solvedRate === null ? "—" : `${solvedRate} %`}</strong><span>de tentatives correctes</span></div><div className="metric"><strong>{attempts.length}</strong><span>tentatives enregistrées</span></div></article>
       </section>
-      <section className="panel"><div className="panel-heading"><div><span className="eyebrow">Compétences</span><h2>Trajectoire vers 1500</h2></div></div><SkillMeter label="Finales" value={1400} tone="strong" /><SkillMeter label="Tactique" value={1350} /><SkillMeter label="Ouvertures" value={1300} /><SkillMeter label="Gestion du temps" value={1280} /><SkillMeter label="Stratégie" value={1250} tone="focus" /></section>
+      <section className="panel"><div className="panel-heading"><div><span className="eyebrow">Compétences calculées</span><h2>Trajectoire vers {profile.targetRating}</h2></div></div>{(Object.entries(profile.skillRatings) as Array<[SkillArea, number]>).map(([area, rating]) => <SkillMeter key={area} label={skillLabels[area]} value={rating} tone={area === topSignal?.area ? "focus" : "normal"} />)}</section>
     </div>
   );
 }
@@ -395,6 +469,11 @@ export function ChessCoachApp() {
   const [activePlan, setActivePlan] = useState<TrainingPlan>(initialPlan);
   const [selectedStepId, setSelectedStepId] = useState(initialPlan.steps[0]?.id ?? "");
   const [sessionHistory, setSessionHistory] = useState<TrainingPlan[]>([]);
+  const [activeExercise, setActiveExercise] = useState<Exercise>(snapshotExercise);
+  const [attemptHistory, setAttemptHistory] = useState<Attempt[]>([]);
+  const [cachedGames, setCachedGames] = useState<Game[]>([]);
+  const [cloudSynced, setCloudSynced] = useState(false);
+  const [runtimeSignals, setRuntimeSignals] = useState<WeaknessSignal[]>(weeklySignals);
 
   useEffect(() => {
     let cancelled = false;
@@ -404,12 +483,36 @@ export function ChessCoachApp() {
     listTrainingPlans().then((plans) => {
       if (!cancelled) setSessionHistory(plans);
     }).catch(() => undefined);
+    listCachedExercises().then((exercises) => {
+      if (!cancelled && exercises.length) setActiveExercise(exercises[0]);
+    }).catch(() => undefined);
+    listAttempts().then((attempts) => {
+      if (!cancelled) setAttemptHistory(attempts);
+    }).catch(() => undefined);
+    listCachedGames().then((games) => {
+      if (!cancelled) setCachedGames(games);
+    }).catch(() => undefined);
     return () => { cancelled = true; };
   }, [activePlan.id]);
 
   useEffect(() => {
-    if (online) syncPendingAttempts().catch(() => undefined);
-  }, [online]);
+    if (!online) return;
+    let cancelled = false;
+    syncCloudState().then(async (state) => {
+      if (cancelled) return;
+      setCloudSynced(true);
+      setCachedGames(state.games);
+      setAttemptHistory(state.attempts);
+      setSessionHistory(state.plans);
+      if (state.exercises.length) setActiveExercise(state.exercises[0]);
+      setRuntimeSignals(signalsWithAttempts(weeklySignals, state.attempts, state.exercises));
+      const syncedPlan = state.plans.find((plan) => plan.id === activePlan.id);
+      if (syncedPlan) setActivePlan(syncedPlan);
+    }).catch(() => {
+      if (!cancelled) setCloudSynced(false);
+    });
+    return () => { cancelled = true; };
+  }, [activePlan.id, online]);
 
   useEffect(() => {
     const installHandler = (event: Event) => { event.preventDefault(); setInstallPrompt(event as BeforeInstallPromptEvent); };
@@ -442,6 +545,7 @@ export function ChessCoachApp() {
     setActivePlan(nextPlan);
     await saveTrainingPlan(nextPlan);
     setSessionHistory(await listTrainingPlans());
+    if (online) syncCloudState().then(() => setCloudSynced(true)).catch(() => setCloudSynced(false));
     const nextStep = nextPlan.steps.find((step) => !step.completed);
     if (nextStep) setSelectedStepId(nextStep.id);
   };
@@ -459,31 +563,88 @@ export function ChessCoachApp() {
       white: profile.chessComUsername,
       black: `ChessCoach · Stockfish Lite ${summary.timeControl}`,
       pgn: summary.pgn,
-      analyzed: false,
+      analyzed: summary.criticalPositions.length > 0,
+      timeControl: summary.timeControl,
+      criticalPositions: summary.criticalPositions,
     };
     await cacheGames([game]);
+    setCachedGames(await listCachedGames());
+
+    const critical = summary.criticalPositions[0];
+    if (critical) {
+      const exercise: Exercise = {
+        id: `bot-exercise-${sourceId}`,
+        title: "Position critique de votre partie Stockfish",
+        area: critical.area,
+        fen: critical.fen,
+        sideToMove: critical.fen.includes(" w ") ? "white" : "black",
+        expectedMoves: [critical.bestMove],
+        explanation: `Vous avez joué ${critical.playedMove}. Comparez ce choix avec ${critical.bestMove}, qui limite la meilleure réponse adverse.`,
+        source: "personal",
+        dueAt: new Date().toISOString(),
+        intervalDays: 1,
+        centipawnLoss: critical.centipawnLoss,
+        originGameId: game.id,
+        comparisonMove: critical.playedMove,
+      };
+      await cacheExercises([exercise]);
+      setActiveExercise(exercise);
+      const adaptedPlan: TrainingPlan = {
+        ...activePlan,
+        focus: critical.area,
+        rationale: `Votre dernière partie Stockfish a révélé une position à ${critical.centipawnLoss} centipions de perte.`,
+        steps: activePlan.steps.map((step) => step.kind === "exercise" ? { ...step, title: exercise.title, completed: false } : step),
+      };
+      setActivePlan(adaptedPlan);
+      await saveTrainingPlan(adaptedPlan);
+      setSessionHistory(await listTrainingPlans());
+      setRuntimeSignals((current) => {
+        const next = current.map((signal) => {
+          if (signal.area !== critical.area) return signal;
+          const updated = {
+            ...signal,
+            recurrence: Math.min(1, signal.recurrence + 0.08),
+            evaluationLoss: Math.max(signal.evaluationLoss, Math.min(1, critical.centipawnLoss / 300)),
+            recency: 1,
+            timePressure: critical.area === "time" ? Math.min(1, signal.timePressure + 0.15) : signal.timePressure,
+          };
+          return { ...updated, priority: weaknessPriority(updated) };
+        });
+        return next.sort((left, right) => right.priority - left.priority);
+      });
+    }
+    if (online) syncCloudState().then(() => setCloudSynced(true)).catch(() => setCloudSynced(false));
   };
 
   const title = useMemo(() => navigation.find((item) => item.id === tab)?.label, [tab]);
   const remainingSteps = activePlan.steps.filter((step) => !step.completed).length;
+  const completedSessionDates = new Set(sessionHistory.filter((session) => session.steps.every((step) => step.completed)).map((session) => session.date));
+  let streak = 0;
+  const streakCursor = new Date();
+  while (completedSessionDates.has(streakCursor.toISOString().slice(0, 10))) {
+    streak += 1;
+    streakCursor.setDate(streakCursor.getDate() - 1);
+  }
+  const ratingGap = Math.max(0, profile.targetRating - profile.blitzRating);
+  const goalProgress = Math.min(100, Math.round(profile.blitzRating / profile.targetRating * 100));
 
   return (
     <div className="app-shell">
       <aside className="sidebar">
         <a className="brand" href="#today" onClick={() => setTab("today")}><span>♞</span><div><strong>ChessCoach</strong><small>Votre jeu. Votre plan.</small></div></a>
         <nav aria-label="Navigation principale">{navigation.map((item) => <button key={item.id} type="button" className={tab === item.id ? "active" : ""} onClick={() => setTab(item.id)}><span>{item.icon}</span>{item.label}{item.id === "today" && remainingSteps > 0 && <i>{remainingSteps}</i>}</button>)}</nav>
-        <div className="sidebar-goal"><span>Objectif blitz</span><div><strong>1373</strong><b>/ 1500</b></div><div className="goal-meter"><span style={{ width: "58%" }} /></div><small>127 points à gagner</small></div>
-        <div className="sidebar-profile"><span>VC</span><div><strong>Vincent</strong><small>@vincentito</small></div><button aria-label="Réglages">···</button></div>
+        <div className="sidebar-goal"><span>Objectif blitz</span><div><strong>{profile.blitzRating}</strong><b>/ {profile.targetRating}</b></div><div className="goal-meter"><span style={{ width: `${goalProgress}%` }} /></div><small>{ratingGap} points à gagner</small></div>
+        <div className="sidebar-profile"><span>{profile.displayName.slice(0, 2).toUpperCase()}</span><div><strong>{profile.displayName}</strong><small>@{profile.chessComUsername}</small></div><button aria-label="Réglages">···</button></div>
       </aside>
 
       <main>
         <header className="topbar">
           <div><span className="mobile-knight">♞</span><p>{title}</p></div>
-          <div className="top-actions"><span className={`connection ${online ? "" : "offline"}`}>{online ? "Synchronisé" : "Mode hors ligne"}</span>{installPrompt && <button className="install-button" type="button" onClick={() => installPrompt.prompt()}>Installer l’app</button>}<div className="streak"><span>♨</span><strong>4</strong><small>jours</small></div><span className="avatar">VC</span></div>
+          <div className="top-actions"><span className={`connection ${online ? "" : "offline"}`}>{online ? cloudSynced ? "Cloud synchronisé" : "Synchronisation…" : "Mode hors ligne"}</span>{installPrompt && <button className="install-button" type="button" onClick={() => installPrompt.prompt()}>Installer l’app</button>}{streak > 0 && <div className="streak"><span>♨</span><strong>{streak}</strong><small>jours</small></div>}<span className="avatar">{profile.displayName.slice(0, 2).toUpperCase()}</span></div>
         </header>
         <div className="content">
-          {tab === "today" && <TodayView plan={activePlan} onStart={startSession} />}
-          {tab === "play" && <div className="play-layout"><div><span className="eyebrow">Partie d’entraînement</span><h1>Jouez contre votre coach</h1><p className="lead">Stockfish 18 Lite fonctionne aussi hors ligne. Chaque partie terminée ou abandonnée rejoint votre historique.</p><ChessBoardPanel onGameComplete={(game) => { void recordBotGame(game); }} /></div><aside className="panel play-coach"><div className="coach-avatar">♞</div><h2>Contrat de la partie</h2><p>Avant chaque coup calme, formulez un plan en une phrase : pire pièce, faiblesse cible, échange utile.</p><div className="contract-item"><span>Focus</span><strong>Milieu de jeu</strong></div><div className="contract-item"><span>Cadence mentale</span><strong>2 candidats</strong></div><div className="contract-item"><span>Historique</span><strong>Automatique</strong></div></aside></div>}
+          {tab === "today" && <TodayView plan={activePlan} profile={profile} signals={runtimeSignals} analyzedGames={coachSnapshot.analysis.gamesAnalyzed + cachedGames.filter((game) => game.source === "chesscoach" && game.analyzed).length} history={sessionHistory} onStart={startSession} />}
+          {tab === "play" && <div className="play-layout"><div className="play-main"><div className="play-intro"><span className="eyebrow">Partie d’entraînement</span><h1>Jouez contre votre coach</h1><p className="lead">Stockfish Lite analyse ensuite vos décisions et prépare une position à rejouer.</p></div><ChessBoardPanel onGameComplete={(game) => { void recordBotGame(game); }} /></div><aside className="panel play-coach"><div className="coach-avatar">♞</div><h2>Contrat de la partie</h2><p>Avant chaque coup calme, formulez un plan en une phrase : pire pièce, faiblesse cible, échange utile.</p><div className="contract-item"><span>Focus</span><strong>{skillLabels[activePlan.focus]}</strong></div><div className="contract-item"><span>Cadence mentale</span><strong>2 candidats</strong></div><div className="contract-item"><span>Après-partie</span><strong>Exercice automatique</strong></div></aside></div>}
           {tab === "training" && (
             <TrainingView
               key={`${activePlan.id}-${selectedStepId}`}
@@ -495,10 +656,22 @@ export function ChessCoachApp() {
               onSelectSession={selectSession}
               onComplete={completeStep}
               onGameComplete={recordBotGame}
+              exercise={activeExercise}
+              onAttemptRecorded={async (correct) => {
+                setAttemptHistory(await listAttempts());
+                setRuntimeSignals((current) => current.map((signal) => {
+                  if (signal.area !== activeExercise.area) return signal;
+                  const updated = {
+                    ...signal,
+                    failedAttempts: Math.min(1, Math.max(0, signal.failedAttempts + (correct ? -0.04 : 0.08))),
+                  };
+                  return { ...updated, priority: weaknessPriority(updated) };
+                }).sort((left, right) => right.priority - left.priority));
+              }}
             />
           )}
-          {tab === "games" && <GamesView />}
-          {tab === "progress" && <ProgressView />}
+          {tab === "games" && <GamesView onGamesChange={setCachedGames} />}
+          {tab === "progress" && <ProgressView profile={profile} attempts={attemptHistory} games={cachedGames} signals={runtimeSignals} />}
         </div>
       </main>
 

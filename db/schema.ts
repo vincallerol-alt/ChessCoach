@@ -14,6 +14,7 @@ export const games = sqliteTable("games", {
   id: text("id").primaryKey(),
   ownerEmail: text("owner_email").notNull(),
   sourceId: text("source_id").notNull().unique(),
+  source: text("source").notNull().default("chess.com"),
   username: text("username").notNull(),
   playedAt: text("played_at").notNull(),
   timeClass: text("time_class").notNull(),
@@ -25,6 +26,8 @@ export const games = sqliteTable("games", {
   blackRating: integer("black_rating"),
   pgn: text("pgn").notNull(),
   url: text("url"),
+  timeControl: text("time_control"),
+  criticalPositions: text("critical_positions", { mode: "json" }),
   analyzed: integer("analyzed", { mode: "boolean" }).notNull().default(false),
   createdAt: text("created_at").notNull(),
 }, (table) => [index("games_owner_played_idx").on(table.ownerEmail, table.playedAt)]);
@@ -55,6 +58,9 @@ export const exercises = sqliteTable("exercises", {
   sourceUrl: text("source_url"),
   dueAt: text("due_at").notNull(),
   intervalDays: integer("interval_days").notNull().default(1),
+  centipawnLoss: integer("centipawn_loss"),
+  originGameId: text("origin_game_id"),
+  comparisonMove: text("comparison_move"),
 });
 
 export const attempts = sqliteTable("attempts", {

@@ -1,11 +1,12 @@
 import Dexie, { type EntityTable } from "dexie";
-import type { Attempt, Game, TrainingPlan } from "./types";
+import type { Attempt, Exercise, Game, TrainingPlan } from "./types";
 
 type Setting = { key: string; value: string };
 
 class ChessCoachDatabase extends Dexie {
   games!: EntityTable<Game, "id">;
   attempts!: EntityTable<Attempt, "id">;
+  exercises!: EntityTable<Exercise, "id">;
   plans!: EntityTable<TrainingPlan, "id">;
   settings!: EntityTable<Setting, "key">;
 
@@ -23,6 +24,13 @@ class ChessCoachDatabase extends Dexie {
       plans: "id, date, focus",
       settings: "key",
     }).upgrade((transaction) => transaction.table("plans").clear());
+    this.version(3).stores({
+      games: "id, sourceId, source, playedAt, timeClass, result, analyzed",
+      attempts: "id, exerciseId, createdAt, synced",
+      exercises: "id, area, dueAt, originGameId",
+      plans: "id, date, focus",
+      settings: "key",
+    });
   }
 }
 
@@ -38,6 +46,22 @@ export async function cacheGames(games: Game[]) {
 
 export async function listCachedGames() {
   return offlineDb.games.orderBy("playedAt").reverse().toArray();
+}
+
+export async function cacheExercises(exercises: Exercise[]) {
+  await offlineDb.exercises.bulkPut(exercises);
+}
+
+export async function listCachedExercises() {
+  return offlineDb.exercises.orderBy("dueAt").reverse().toArray();
+}
+
+export async function cacheAttempts(attempts: Attempt[]) {
+  await offlineDb.attempts.bulkPut(attempts);
+}
+
+export async function listAttempts() {
+  return offlineDb.attempts.orderBy("createdAt").reverse().toArray();
 }
 
 export async function loadTrainingPlan(id: string) {
