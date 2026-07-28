@@ -141,6 +141,8 @@ p { line-height: 1.55; }
 .position-launcher button, .coach-live form button { border: 0; border-radius: 7px; padding: 0 14px; color: #f6f3e9; background: #2d493b; cursor: pointer; font-size: 10px; font-weight: 800; }
 .position-error { margin: -7px 0 10px; color: var(--red); font-size: 10px; }
 .coach-live { display: grid; gap: 10px; margin: 16px 0; padding: 13px; border: 1px solid #d2cdbc; border-radius: 10px; background: #f3efe3; }
+.coach-live-shell { min-width: 0; }
+.coach-fab, .coach-live-backdrop, .coach-live-close, .mobile-session-progress { display: none; }
 .coach-live-heading, .coach-live-heading > div { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .coach-live-heading > div span { width: 25px; height: 25px; display: grid; place-items: center; border-radius: 50%; color: #f0d173; background: var(--ink); }
 .coach-live-heading strong { font-size: 11px; }.coach-live-heading small { color: var(--muted); font-size: 8px; }
@@ -178,6 +180,45 @@ p { line-height: 1.55; }
 
 @media (max-width: 680px) {
   body { overscroll-behavior-y: none; }.app-shell { display: block; padding-bottom: calc(70px + env(safe-area-inset-bottom)); }.sidebar { display: none; }.topbar { height: calc(57px + env(safe-area-inset-top)); padding: env(safe-area-inset-top) 16px 0; }.mobile-knight { display: inline; color: #bc903c; font-size: 24px; }.topbar > div:first-child { display: flex; gap: 8px; align-items: center; }.topbar p { font-size: 14px; }.connection, .streak small, .install-button { display: none; }.streak { padding: 0 10px; border-left: 0; }.content { padding: 18px 14px 30px; }.hero-card { min-height: 0; padding: 28px 24px; }.hero-card::after, .session-ring { display: none; }.hero-card h1 { font-size: 34px; letter-spacing: -1px; }.hero-card p { font-size: 12px; }.primary-button { width: 100%; }.dashboard-grid, .lower-grid, .progress-grid { grid-template-columns: minmax(0,1fr); gap: 14px; }.panel { padding: 19px; }.coach-note { order: -1; }.coach-note h2 { font-size: 21px; }.page-title { display: grid; align-items: start; }.rating-badge { text-align: left; }.play-layout, .training-layout { display: block; }.play-layout { margin: -18px -14px 0; }.play-intro { padding: 18px 14px 8px; }.play-layout h1, .training-layout h1, .page-title h1 { font-size: 34px; }.play-layout .board-card { width: 100vw; max-width: none; margin: 0; padding: 8px; border-left: 0; border-right: 0; border-radius: 0; box-shadow: none; }.play-layout .play-coach { margin: 14px; }.play-coach, .exercise-coach { margin-top: 14px; }.board-card { margin: 0 -6px; padding: 9px; border-radius: 10px; }.board-toolbar { min-height: 40px; padding: 3px 3px 9px; }.board-status { align-items: flex-start; flex-direction: column; padding-bottom: 3px; }.board-options { display: grid; grid-template-columns: 1fr 1fr; width: 100%; gap: 8px; }.board-options label { min-width: 0; justify-content: space-between; }.board-options select { min-height: 38px; max-width: 68%; }.chess-clocks > div { min-height: 44px; }.chess-clocks strong { font-size: 18px; }.move-strip { padding-bottom: 2px; }.step-action .secondary-button, .step-action .primary-button { width: 100%; }.feedback { position: static; box-shadow: 0 8px 24px rgba(24,37,31,.12); }.move-comparison { grid-template-columns: 1fr; }.position-launcher { grid-template-columns: 1fr; }.position-launcher input, .position-launcher button { min-height: 42px; }.coach-live { margin-bottom: 12px; }.coach-live-heading { align-items: flex-start; }.coach-live form { grid-template-columns: 1fr; }.coach-live form button { min-height: 40px; }.program-grid { grid-template-columns: repeat(14, 132px); }.history-panel > button { grid-template-columns: 75px minmax(0, 1fr); }.history-panel > button small { grid-column: 2; }.bottom-nav { position: fixed; z-index: 30; left: 0; right: 0; bottom: 0; height: calc(62px + env(safe-area-inset-bottom)); display: grid; grid-template-columns: repeat(5, 1fr); padding: 5px 5px env(safe-area-inset-bottom); border-top: 1px solid #d4d0c6; background: rgba(251,250,246,.96); backdrop-filter: blur(14px); }.bottom-nav button { display: grid; place-items: center; gap: 1px; border: 0; color: #7d837e; background: transparent; }.bottom-nav button span { font-size: 19px; line-height: 1; }.bottom-nav button small { font-size: 8px; }.bottom-nav button.active { color: #355240; }.bottom-nav button.active span { color: #b58235; }.table-head, .table-row { min-width: 560px; }.week-dots span { width: 25px; height: 25px; }
+}
+
+@media (max-width: 680px) {
+  .training-layout { margin: -18px -14px 0; }
+  .training-intro { padding: 18px 14px 8px; }
+  .training-intro h1 { margin-bottom: 7px; font-size: 29px; }
+  .training-intro .lead { margin-bottom: 8px; }
+  .mobile-session-progress { display: flex; gap: 8px; overflow-x: auto; padding: 8px 14px 12px; scrollbar-width: none; scroll-snap-type: x proximity; }
+  .mobile-session-progress button { min-width: 58px; min-height: 48px; display: grid; grid-template-columns: 22px 1fr; align-items: center; gap: 5px; scroll-snap-align: start; border: 1px solid #d2d0c7; border-radius: 9px; padding: 6px 8px; color: var(--muted); background: var(--paper); }
+  .mobile-session-progress button span { width: 22px; height: 22px; display: grid; place-items: center; border: 1px solid #c5cbc5; border-radius: 50%; color: var(--ink); font-size: 9px; font-weight: 800; }
+  .mobile-session-progress button small { font-size: 8px; }
+  .mobile-session-progress button.active { border-color: var(--gold); background: #f4ecd3; }
+  .mobile-session-progress button.active span { border-color: var(--gold); background: #efd174; }
+  .mobile-session-progress button.done span { border-color: #638063; color: #fff; background: #638063; }
+  .training-main > .exercise-sequence { width: auto; margin: 0 8px 8px; }
+  .training-main > .board-card { width: 100vw; max-width: none; margin: 0; padding: 6px; border-right: 0; border-left: 0; border-radius: 0; box-shadow: none; }
+  .training-main > .step-action, .training-main > .lead { margin-right: 14px; margin-left: 14px; }
+  .exercise-coach { margin: 10px 14px 0; padding: 0; border: 0; background: transparent; box-shadow: none; }
+  .exercise-coach > .coach-avatar, .exercise-coach > .session-summary-title, .exercise-coach > .session-summary-copy, .exercise-coach > .compact-steps { display: none; }
+  .exercise-coach > .feedback { margin: 0; border: 1px solid #dbc98e; border-left: 4px solid var(--gold); border-radius: 9px; background: #fffaf0; }
+
+  .coach-live-shell.mobile-floating .coach-fab { position: fixed; z-index: 45; right: 14px; bottom: calc(74px + env(safe-area-inset-bottom)); width: 54px; height: 54px; display: grid; place-items: center; border: 1px solid #50665a; border-radius: 50%; color: #f2d477; background: var(--ink); box-shadow: 0 10px 28px rgba(24,37,31,.32); }
+  .coach-live-shell.mobile-floating .coach-fab span { font-size: 28px; line-height: 1; }
+  .coach-live-shell.mobile-floating .coach-fab i { position: absolute; top: 2px; right: 2px; width: 11px; height: 11px; border: 2px solid var(--paper); border-radius: 50%; background: var(--gold); }
+  .coach-live-shell.mobile-floating.open .coach-fab { display: none; }
+  .coach-live-shell.mobile-floating .coach-live-backdrop { position: fixed; z-index: 48; inset: 0; display: block; border: 0; background: rgba(13,23,18,.48); opacity: 0; visibility: hidden; transition: opacity .18s ease, visibility .18s ease; }
+  .coach-live-shell.mobile-floating .coach-live { position: fixed; z-index: 50; right: 0; bottom: calc(62px + env(safe-area-inset-bottom)); left: 0; max-height: min(72svh, 650px); display: flex; flex-direction: column; margin: 0; padding: 16px 14px calc(14px + env(safe-area-inset-bottom)); overflow-y: auto; border: 0; border-radius: 18px 18px 0 0; box-shadow: 0 -16px 42px rgba(15,26,20,.24); transform: translateY(105%); visibility: hidden; transition: transform .2s ease, visibility .2s ease; }
+  .coach-live-shell.mobile-floating.open .coach-live-backdrop { opacity: 1; visibility: visible; }
+  .coach-live-shell.mobile-floating.open .coach-live { transform: translateY(0); visibility: visible; }
+  .coach-live-close { width: 34px; height: 34px; display: grid; place-items: center; margin-left: auto; border: 1px solid #c4c0b4; border-radius: 50%; color: var(--ink); background: #fff; font-size: 22px; line-height: 1; }
+  .coach-live-shell.mobile-floating .coach-live-heading { display: grid; grid-template-columns: 1fr auto; }
+  .coach-live-shell.mobile-floating .coach-live-heading > div { justify-content: flex-start; }
+  .coach-live-shell.mobile-floating .coach-live-heading > small { grid-column: 1; }
+  .coach-live-shell.mobile-floating .coach-live-heading > .coach-live-close { grid-column: 2; grid-row: 1 / 3; }
+  .coach-live-shell.mobile-floating .coach-live-messages { max-height: 28svh; }
+  .coach-live-shell.mobile-floating .coach-live-suggestions { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 2px; }
+  .coach-live-shell.mobile-floating .coach-live-suggestions button { min-height: 36px; flex: 0 0 auto; }
+  .coach-live-shell.mobile-floating .coach-live form { grid-template-columns: minmax(0, 1fr) auto; position: sticky; bottom: 0; padding-top: 4px; background: #f3efe3; }
+  .coach-live-shell.mobile-floating .coach-live form input, .coach-live-shell.mobile-floating .coach-live form button { min-height: 44px; }
 }
 
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; animation: none !important; transition: none !important; } }

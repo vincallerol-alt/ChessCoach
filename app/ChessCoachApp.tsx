@@ -339,18 +339,28 @@ function TrainingView({
   return (
     <div className="view-stack">
       <div className="training-layout">
-        <div>
-          <span className="eyebrow">Étape {plan.steps.indexOf(selectedStep) + 1} sur {plan.steps.length} · {plan.focus}</span>
-          <h1>{selectedStep.title}</h1>
-          <p className="lead">{selectedStep.kind === "exercise" || selectedStep.kind === "replay" || (selectedStep.kind === "review" && plan.sessionKind !== "match")
-            ? "Trouvez le meilleur candidat sans moteur. Le coach donnera un retour progressif après votre coup."
-            : plan.rationale}</p>
+        <div className="training-main">
+          <div className="training-intro">
+            <span className="eyebrow">Étape {plan.steps.indexOf(selectedStep) + 1} sur {plan.steps.length} · {plan.focus}</span>
+            <h1>{selectedStep.title}</h1>
+            <p className="lead">{selectedStep.kind === "exercise" || selectedStep.kind === "replay" || (selectedStep.kind === "review" && plan.sessionKind !== "match")
+              ? "Trouvez le meilleur candidat sans moteur. Le coach donnera un retour progressif après votre coup."
+              : plan.rationale}</p>
+          </div>
+          <nav className="mobile-session-progress" aria-label="Étapes de la séance">
+            {plan.steps.map((step, index) => (
+              <button key={step.id} className={`${step.id === selectedStep.id ? "active" : ""} ${step.completed ? "done" : ""}`} type="button" onClick={() => onSelectStep(step.id)}>
+                <span>{step.completed ? "✓" : index + 1}</span>
+                <small>{step.minutes} min</small>
+              </button>
+            ))}
+          </nav>
           {stepContent()}
         </div>
         <aside className="panel exercise-coach">
           <div className="coach-avatar">♞</div>
-          <h2>Votre séance complète</h2>
-          <p>{completed}/{plan.steps.length} étapes réellement terminées.</p>
+          <h2 className="session-summary-title">Votre séance complète</h2>
+          <p className="session-summary-copy">{completed}/{plan.steps.length} étapes réellement terminées.</p>
           {feedback && (
             <div className="feedback" role="status">
               <strong>{feedback.stage === 1 ? "À vous de rejouer" : feedback.stage === 2 ? "Indice du coach" : feedback.reveal ? "Solution expliquée" : "Bien joué"}</strong>
@@ -383,6 +393,7 @@ function TrainingView({
                 ? "Je viens de me tromper. Explique mon erreur sans me donner immédiatement la solution."
                 : undefined}
               automaticKey={feedback && feedback.stage > 0 ? `${exercise.id}-${failedAttempts}` : undefined}
+              floatingOnMobile
             />
           )}
           <div className="compact-steps">

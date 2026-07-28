@@ -3,10 +3,13 @@
 ## Partie d’entraînement sur mobile
 
 - Échiquier bord à bord sur les écrans de moins de 680 px.
+- Progression de séance tactile et défilable au-dessus de l’échiquier.
 - Pendules, cadence et force accessibles sous le pouce.
 - Historique compact des huit derniers demi-coups.
 - Zones sûres Android/iOS via `env(safe-area-inset-*)`.
 - Feedback d’exercice maintenu visible au-dessus de la navigation.
+- Coach IA accessible par une bulle flottante au-dessus de la navigation ; le panneau regroupe texte, voix et suggestions rapides.
+- Après une erreur, la bulle ouvre automatiquement l’explication contextualisée sans masquer durablement l’échiquier.
 - Les étapes replay, révision et série utilisent des positions distinctes.
 - Une série tactique enchaîne plusieurs positions sans retour au menu.
 - Une étape reste incomplète si aucune position n’est disponible.

@@ -12,6 +12,7 @@ type Props = {
   explanation?: string;
   automaticQuestion?: string;
   automaticKey?: string;
+  floatingOnMobile?: boolean;
 };
 
 type Message = { role: "coach" | "player"; text: string; source?: "openai" | "deterministic" };
@@ -25,10 +26,12 @@ export function CoachLivePanel({
   explanation,
   automaticQuestion,
   automaticKey,
+  floatingOnMobile = false,
 }: Props) {
   const [question, setQuestion] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
   const lastAutomaticKey = useRef<string | undefined>(undefined);
 
   const ask = useCallback(async (nextQuestion: string) => {
@@ -67,44 +70,73 @@ export function CoachLivePanel({
   useEffect(() => {
     if (!automaticQuestion || !automaticKey || lastAutomaticKey.current === automaticKey) return;
     lastAutomaticKey.current = automaticKey;
+    const openTimer = floatingOnMobile ? window.setTimeout(() => setMobileOpen(true), 0) : undefined;
     void ask(automaticQuestion);
-  }, [ask, automaticKey, automaticQuestion]);
+    return () => {
+      if (openTimer !== undefined) window.clearTimeout(openTimer);
+    };
+  }, [ask, automaticKey, automaticQuestion, floatingOnMobile]);
 
   return (
-    <section className="coach-live">
-      <div className="coach-live-heading">
-        <div><span>♞</span><strong>Coach en direct</strong></div>
-        <small>IA + contexte Stockfish</small>
-      </div>
-      <VoiceCoach
-        fen={fen}
-        stepTitle={stepTitle}
-        playedMove={playedMove}
-        bestMove={bestMove}
-        evaluationLoss={evaluationLoss}
-        explanation={explanation}
-        onTranscript={(message) => setMessages((current) => [...current, message])}
-      />
-      <div className="coach-live-suggestions">
-        <button type="button" onClick={() => ask("Explique-moi cette position simplement.")}>Expliquer</button>
-        <button type="button" onClick={() => ask("Quels sont les deux meilleurs plans candidats ?")}>Comparer les plans</button>
-        <button type="button" onClick={() => ask("Quelle menace dois-je vérifier en premier ?")}>Voir la menace</button>
-      </div>
-      {messages.length > 0 && (
-        <div className="coach-live-messages" aria-live="polite">
-          {messages.slice(-4).map((message, index) => (
-            <p key={`${message.role}-${index}`} className={message.role}>
-              <strong>{message.role === "coach" ? "Coach" : "Vous"}</strong>
-              {message.text}
-              {message.role === "coach" && message.source === "deterministic" && <small>Mode sans crédit IA</small>}
-            </p>
-          ))}
-        </div>
+    <div className={`coach-live-shell ${floatingOnMobile ? "mobile-floating" : ""} ${mobileOpen ? "open" : ""}`}>
+      {floatingOnMobile && (
+        <>
+          <button
+            className="coach-fab"
+            type="button"
+            aria-label="Ouvrir le coach en direct"
+            aria-expanded={mobileOpen}
+            onClick={() => setMobileOpen(true)}
+          >
+            <span aria-hidden="true">♞</span>
+            {messages.length > 0 && <i aria-hidden="true" />}
+          </button>
+          <button className="coach-live-backdrop" type="button" aria-label="Fermer le coach" onClick={() => setMobileOpen(false)} />
+        </>
       )}
-      <form onSubmit={(event) => { event.preventDefault(); void ask(question); }}>
-        <input value={question} onChange={(event) => setQuestion(event.target.value)} placeholder="Posez une question sur la position…" maxLength={600} />
-        <button type="submit" disabled={loading || !question.trim()}>{loading ? "…" : "Envoyer"}</button>
-      </form>
-    </section>
+      <section
+        className="coach-live"
+        role={floatingOnMobile && mobileOpen ? "dialog" : undefined}
+        aria-modal={floatingOnMobile && mobileOpen ? true : undefined}
+        aria-label="Coach en direct"
+      >
+        <div className="coach-live-heading">
+          <div><span>♞</span><strong>Coach en direct</strong></div>
+          <small>IA + contexte Stockfish</small>
+          {floatingOnMobile && (
+            <button className="coach-live-close" type="button" aria-label="Fermer le coach" onClick={() => setMobileOpen(false)}>×</button>
+          )}
+        </div>
+        <VoiceCoach
+          fen={fen}
+          stepTitle={stepTitle}
+          playedMove={playedMove}
+          bestMove={bestMove}
+          evaluationLoss={evaluationLoss}
+          explanation={explanation}
+          onTranscript={(message) => setMessages((current) => [...current, message])}
+        />
+        <div className="coach-live-suggestions">
+          <button type="button" onClick={() => ask("Explique-moi cette position simplement.")}>Expliquer</button>
+          <button type="button" onClick={() => ask("Quels sont les deux meilleurs plans candidats ?")}>Comparer les plans</button>
+          <button type="button" onClick={() => ask("Quelle menace dois-je vérifier en premier ?")}>Voir la menace</button>
+        </div>
+        {messages.length > 0 && (
+          <div className="coach-live-messages" aria-live="polite">
+            {messages.slice(-4).map((message, index) => (
+              <p key={`${message.role}-${index}`} className={message.role}>
+                <strong>{message.role === "coach" ? "Coach" : "Vous"}</strong>
+                {message.text}
+                {message.role === "coach" && message.source === "deterministic" && <small>Mode sans crédit IA</small>}
+              </p>
+            ))}
+          </div>
+        )}
+        <form onSubmit={(event) => { event.preventDefault(); void ask(question); }}>
+          <input value={question} onChange={(event) => setQuestion(event.target.value)} placeholder="Posez une question sur la position…" maxLength={600} />
+          <button type="submit" disabled={loading || !question.trim()}>{loading ? "…" : "Envoyer"}</button>
+        </form>
+      </section>
+    </div>
   );
 }
