@@ -15,6 +15,13 @@
       "when": 1785180128158,
       "tag": "0001_cute_tenebrous",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1785274604641,
+      "tag": "0002_gifted_rocket_racer",
+      "breakpoints": true
     }
   ]
 }

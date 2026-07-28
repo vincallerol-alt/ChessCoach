@@ -1,4 +1,4 @@
-import { desc } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import { getChatGPTUser } from "../../../chatgpt-auth";
 import { getDb } from "../../../../db";
 import { games as gamesTable, profiles } from "../../../../db/schema";
@@ -13,6 +13,12 @@ type ChessComGame = {
   time_class: string;
   white: ChessComPlayer;
   black: ChessComPlayer;
+};
+type ChessComStats = {
+  chess_blitz?: {
+    last?: { rating?: number };
+    best?: { rating?: number };
+  };
 };
 
 const headers = { "user-agent": "ChessCoach/0.1 contact: local-private-beta", accept: "application/json" };
@@ -46,13 +52,17 @@ function normalizeGame(raw: ChessComGame, username: string): Game | null {
 export async function POST(request: Request) {
   try {
     const body = await request.json() as { username?: string; limit?: number };
-    const username = (body.username ?? "vincentito").trim().toLowerCase();
+    const username = (body.username ?? "").trim().toLowerCase();
     const limit = Math.max(1, Math.min(300, body.limit ?? 300));
     if (!/^[a-z0-9_-]{2,40}$/i.test(username)) return Response.json({ error: "Nom Chess.com invalide" }, { status: 400 });
 
-    const archiveResponse = await fetch(`https://api.chess.com/pub/player/${encodeURIComponent(username)}/games/archives`, { headers });
+    const [archiveResponse, statsResponse] = await Promise.all([
+      fetch(`https://api.chess.com/pub/player/${encodeURIComponent(username)}/games/archives`, { headers }),
+      fetch(`https://api.chess.com/pub/player/${encodeURIComponent(username)}/stats`, { headers }),
+    ]);
     if (!archiveResponse.ok) return Response.json({ error: "Profil Chess.com inaccessible" }, { status: archiveResponse.status });
     const { archives } = await archiveResponse.json() as { archives: string[] };
+    const stats = statsResponse.ok ? await statsResponse.json() as ChessComStats : undefined;
     const imported: Game[] = [];
 
     for (const archive of archives.slice(-10).reverse()) {
@@ -68,17 +78,57 @@ export async function POST(request: Request) {
       }
     }
 
+    const latestBlitzGame = imported.find((game) => game.timeClass === "blitz");
+    const latestGameRating = latestBlitzGame
+      ? latestBlitzGame.playerColor === "white" ? latestBlitzGame.whiteRating : latestBlitzGame.blackRating
+      : undefined;
+    const blitzRating = stats?.chess_blitz?.last?.rating ?? latestGameRating ?? 0;
+    const importedPeak = imported
+      .filter((game) => game.timeClass === "blitz")
+      .map((game) => game.playerColor === "white" ? game.whiteRating : game.blackRating)
+      .filter((rating): rating is number => typeof rating === "number")
+      .reduce((peak, rating) => Math.max(peak, rating), 0);
+    const blitzPeak = Math.max(stats?.chess_blitz?.best?.rating ?? 0, importedPeak, blitzRating);
+
     let persisted = 0;
+    let cloudPersisted = false;
+    let profileUpdate = {
+      chessComUsername: username,
+      blitzRating,
+      blitzPeak,
+    };
     try {
       const user = await getChatGPTUser();
       const ownerEmail = user?.email ?? "local@chesscoach.app";
       const db = getDb();
       const now = new Date().toISOString();
-      await db.insert(profiles).values({ email: ownerEmail, chessComUsername: username, displayName: user?.displayName ?? "Vincent", targetRating: 1500, dailyMinutes: 20, createdAt: now, updatedAt: now }).onConflictDoUpdate({ target: profiles.email, set: { chessComUsername: username, updatedAt: now } });
+      const [existingProfile] = await db.select().from(profiles).where(eq(profiles.email, ownerEmail)).limit(1);
+      const persistedPeak = Math.max(existingProfile?.blitzPeak ?? 0, blitzPeak);
+      profileUpdate = { ...profileUpdate, blitzPeak: persistedPeak };
+      await db.insert(profiles).values({
+        email: ownerEmail,
+        chessComUsername: username,
+        displayName: user?.displayName ?? username,
+        blitzRating,
+        blitzPeak: persistedPeak,
+        targetRating: 1500,
+        dailyMinutes: 20,
+        createdAt: now,
+        updatedAt: now,
+      }).onConflictDoUpdate({
+        target: profiles.email,
+        set: {
+          chessComUsername: username,
+          blitzRating,
+          blitzPeak: persistedPeak,
+          updatedAt: now,
+        },
+      });
       for (const game of imported) {
         const rows = await db.insert(gamesTable).values({ ...game, ownerEmail, username, createdAt: now }).onConflictDoNothing().returning({ id: gamesTable.id });
         persisted += rows.length;
       }
+      cloudPersisted = true;
     } catch {
       // Local preview keeps the authoritative offline copy in IndexedDB.
     }
@@ -87,6 +137,8 @@ export async function POST(request: Request) {
       games: imported,
       imported: imported.length,
       persisted,
+      cloudPersisted,
+      profile: profileUpdate,
       analysisMode: "device",
       analysisPending: Math.min(300, imported.length),
     });

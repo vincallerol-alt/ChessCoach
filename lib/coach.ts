@@ -19,56 +19,21 @@ export function nextReviewDate(lastAttempt: Date, intervalDays: number, correct:
   return next;
 }
 
-const baseSignals: Array<Omit<WeaknessSignal, "priority">> = [
-  {
-    id: "strategy-plan",
-    area: "strategy",
-    label: "Construire un plan en milieu de jeu",
-    recurrence: 0.88,
-    evaluationLoss: 0.72,
-    recency: 0.92,
-    timePressure: 0.58,
-    failedAttempts: 0.44,
-  },
-  {
-    id: "time-decisions",
-    area: "time",
-    label: "Décider sous pression",
-    recurrence: 0.74,
-    evaluationLoss: 0.56,
-    recency: 0.86,
-    timePressure: 0.95,
-    failedAttempts: 0.34,
-  },
-  {
-    id: "tactical-check",
-    area: "tactics",
-    label: "Vérification tactique avant de jouer",
-    recurrence: 0.6,
-    evaluationLoss: 0.68,
-    recency: 0.66,
-    timePressure: 0.62,
-    failedAttempts: 0.5,
-  },
-];
-
-export const defaultSignals: WeaknessSignal[] = baseSignals.map((signal) => ({
-  ...signal,
-  priority: weaknessPriority(signal),
-}));
-
 export class AdaptiveCoachPlanner implements CoachPlanner {
   buildDailyPlan(profile: PlayerProfile, signals: WeaknessSignal[], date: Date): TrainingPlan {
-    const focusSignal = [...signals].sort((a, b) => b.priority - a.priority)[0] ?? defaultSignals[0];
+    const focusSignal = [...signals].sort((a, b) => b.priority - a.priority)[0];
+    const focus = focusSignal?.area ?? "tactics";
     const minutes = profile.dailyMinutes;
     return {
       id: `${profile.id}-${date.toISOString().slice(0, 10)}`,
       date: date.toISOString().slice(0, 10),
       durationMinutes: minutes,
       contentVersion: 2,
-      focus: focusSignal.area,
-      headline: "Transformer une position égale en plan clair",
-      rationale: `${focusSignal.label} est aujourd’hui le levier le plus rentable pour viser ${profile.targetRating}.`,
+      focus,
+      headline: focusSignal ? focusSignal.label : "Construire votre diagnostic de jeu",
+      rationale: focusSignal
+        ? `${focusSignal.label} est la priorité calculée à partir de vos données réelles.`
+        : "Synchronisez Chess.com ou jouez une partie pour personnaliser cette séance.",
       steps: [
         { id: "replay", kind: "replay", title: "Rejouer une erreur personnelle", minutes: 4, completed: false },
         { id: "review", kind: "review", title: "Révision espacée · 1 position", minutes: 4, completed: false },
@@ -81,10 +46,10 @@ export class AdaptiveCoachPlanner implements CoachPlanner {
 }
 
 const messages: Record<SkillArea, string> = {
-  openings: "L’ouverture est saine. Vérifie surtout le plan de pièces avant de mémoriser une nouvelle variante.",
+  openings: "Vérifie le développement, la sécurité du roi et le plan de pièces avant de mémoriser une nouvelle variante.",
   tactics: "Avant de jouer, balaie échecs, prises et menaces — pour toi comme pour l’adversaire.",
   strategy: "Ne cherche pas encore un coup. Nomme d’abord ta pire pièce et le pion faible que tu peux cibler.",
-  endgames: "Ta technique de finale est un point fort : simplifie seulement si l’activité de ton roi reste supérieure.",
+  endgames: "Avant de simplifier, compare l’activité des rois, la structure de pions et la création d’un pion passé.",
   time: "Sous 30 secondes, choisis entre deux candidats maximum et garde cinq secondes pour le contrôle tactique.",
 };
 

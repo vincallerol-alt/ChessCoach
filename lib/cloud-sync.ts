@@ -8,9 +8,12 @@ import {
   saveTrainingPlan,
   syncPendingAttempts,
 } from "./offline-db";
-import type { Attempt, Exercise, Game, TrainingPlan } from "./types";
+import type { Attempt, Exercise, Game, PlayerProfile, TrainingPlan } from "./types";
 
-type CloudState = {
+export type CloudProfile = Pick<PlayerProfile, "chessComUsername" | "displayName" | "blitzRating" | "blitzPeak" | "targetRating" | "dailyMinutes">;
+
+export type CloudState = {
+  profile: CloudProfile | null;
   games: Game[];
   plans: TrainingPlan[];
   exercises: Exercise[];

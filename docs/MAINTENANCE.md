@@ -11,7 +11,7 @@ Chaque lundi à 07:00, heure de Paris. Une fréquence hebdomadaire évite de mod
 3. Calculer les priorités : récurrence 35 %, perte d’évaluation 25 %, récence 20 %, pression 10 %, exercices échoués 10 %.
 4. Conserver le focus existant si moins de 5 parties sont disponibles.
 5. Régénérer six exercices et un programme de 14 jours, avec quatre journées réservées aux parties réelles.
-6. Mettre à jour `data/coach-snapshot.json` et `reports/coach-latest.md`.
+6. Produire `reports/coach-latest.json` et `reports/coach-latest.md` uniquement depuis les données Chess.com du jour.
 7. Exécuter les tests puis publier uniquement si tout réussit.
 
 Commande manuelle :
@@ -23,7 +23,7 @@ npm run coach:refresh
 Variables optionnelles :
 
 ```text
-CHESSCOACH_USERNAME=vincentito
+CHESSCOACH_USERNAME=<pseudo-chess.com>
 CHESSCOACH_MAX_GAMES=50
 CHESSCOACH_LOOKBACK_DAYS=90
 CHESSCOACH_NODES=8000

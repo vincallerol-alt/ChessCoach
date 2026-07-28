@@ -1,14 +1,14 @@
 import { spawn } from "node:child_process";
-import { copyFile, mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { copyFile, mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Chess } from "chess.js";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const SNAPSHOT_PATH = join(ROOT, "data", "coach-snapshot.json");
+const EXPORT_PATH = join(ROOT, "reports", "coach-latest.json");
 const REPORT_PATH = join(ROOT, "reports", "coach-latest.md");
-const USERNAME = (process.env.CHESSCOACH_USERNAME ?? "vincentito").toLowerCase();
+const USERNAME = (process.env.CHESSCOACH_USERNAME ?? "").trim().toLowerCase();
 const MAX_GAMES = Math.max(1, Math.min(50, Number(process.env.CHESSCOACH_MAX_GAMES ?? 50)));
 const LOOKBACK_DAYS = Math.max(14, Math.min(180, Number(process.env.CHESSCOACH_LOOKBACK_DAYS ?? 90)));
 const NODES_PER_POSITION = Math.max(2_000, Math.min(40_000, Number(process.env.CHESSCOACH_NODES ?? 8_000)));
@@ -159,6 +159,7 @@ async function fetchRecentGames() {
         playedAt: new Date(game.end_time * 1000).toISOString(),
         timeClass: game.time_class,
         playerColor: isWhite ? "w" : "b",
+        playerRating: isWhite ? game.white.rating : game.black.rating,
         pgn: game.pgn,
       });
     }
@@ -232,12 +233,11 @@ async function analyzeGames(engine, games) {
   return errors;
 }
 
-function buildSignals(errors, previousSignals) {
-  const previousByArea = new Map(previousSignals.map((signal) => [signal.area, signal]));
+function buildSignals(errors) {
   const total = Math.max(1, errors.length);
-  return Object.keys(AREA_LABELS).map((area) => {
+  return Object.keys(AREA_LABELS).flatMap((area) => {
     const areaErrors = errors.filter((error) => error.area === area);
-    const previous = previousByArea.get(area);
+    if (!areaErrors.length) return [];
     const averageLoss = areaErrors.length
       ? areaErrors.reduce((sum, error) => sum + error.centipawnLoss, 0) / areaErrors.length
       : 0;
@@ -248,20 +248,18 @@ function buildSignals(errors, previousSignals) {
       id: `weekly-${area}`,
       area,
       label: AREA_LABELS[area],
-      recurrence: areaErrors.length ? clamp(areaErrors.length / total * 2.5) : (previous?.recurrence ?? 0.1) * 0.8,
-      evaluationLoss: areaErrors.length ? clamp(averageLoss / 300) : (previous?.evaluationLoss ?? 0.1) * 0.8,
-      recency: areaErrors.length ? clamp(1 - newestAgeDays / LOOKBACK_DAYS) : 0.1,
-      timePressure: areaErrors.length
-        ? areaErrors.filter((error) => error.timePressure).length / areaErrors.length
-        : (previous?.timePressure ?? 0.1) * 0.8,
-      failedAttempts: previous?.failedAttempts ?? 0.25,
+      recurrence: clamp(areaErrors.length / total * 2.5),
+      evaluationLoss: clamp(averageLoss / 300),
+      recency: clamp(1 - newestAgeDays / LOOKBACK_DAYS),
+      timePressure: areaErrors.filter((error) => error.timePressure).length / areaErrors.length,
+      failedAttempts: 0,
     };
     return { ...signal, priority: weaknessPriority(signal) };
   }).sort((left, right) => right.priority - left.priority);
 }
 
-function buildExercises(errors, previousExercises) {
-  const exercises = [...errors]
+function buildExercises(errors) {
+  return [...errors]
     .sort((left, right) => right.centipawnLoss - left.centipawnLoss)
     .slice(0, 6)
     .map((error, index) => ({
@@ -278,19 +276,24 @@ function buildExercises(errors, previousExercises) {
       intervalDays: 1,
       centipawnLoss: error.centipawnLoss,
     }));
-  return exercises.length ? exercises : previousExercises;
 }
 
-function updateProfile(previousProfile, signals, games) {
-  const ratings = { ...previousProfile.skillRatings };
+function updateProfile(signals, games) {
+  const blitzRating = games.find((game) => game.timeClass === "blitz")?.playerRating ?? 0;
+  const ratings = { openings: blitzRating, tactics: blitzRating, strategy: blitzRating, endgames: blitzRating, time: blitzRating };
   for (const signal of signals) {
-    ratings[signal.area] = Math.round(1500 - signal.priority * 280);
+    ratings[signal.area] = Math.max(400, Math.round(blitzRating - signal.priority * 220));
   }
   const focusAreas = signals.slice(0, 2).map((signal) => signal.label);
   const lowPriority = [...signals].sort((a, b) => a.priority - b.priority).slice(0, 2);
   return {
-    ...previousProfile,
-    blitzRating: previousProfile.blitzRating,
+    id: USERNAME,
+    chessComUsername: USERNAME,
+    displayName: USERNAME,
+    blitzRating,
+    blitzPeak: Math.max(blitzRating, ...games.map((game) => game.playerRating ?? 0)),
+    targetRating: Number(process.env.CHESSCOACH_TARGET_RATING ?? 1500),
+    dailyMinutes: Number(process.env.CHESSCOACH_DAILY_MINUTES ?? 20),
     skillRatings: ratings,
     focusAreas,
     strengths: lowPriority.map((signal) => AREA_LABELS[signal.area]),
@@ -387,11 +390,10 @@ function buildProgram(profile, signals, exercises, startDate, sourceGameCount) {
   };
 }
 
-function buildSnapshot(previous, games, errors) {
-  const computedSignals = buildSignals(errors, previous.signals);
-  const signals = games.length >= 5 ? computedSignals : previous.signals;
-  const exercises = buildExercises(errors, previous.exercises);
-  const profile = updateProfile(previous.profile, signals, games);
+function buildSnapshot(games, errors) {
+  const signals = buildSignals(errors);
+  const exercises = buildExercises(errors);
+  const profile = updateProfile(signals, games);
   const program = buildProgram(profile, signals, exercises, new Date(), games.length);
   return {
     generatedAt: new Date().toISOString(),
@@ -401,14 +403,19 @@ function buildSnapshot(previous, games, errors) {
       gamesAnalyzed: games.length,
       positionsFlagged: errors.length,
       lookbackDays: LOOKBACK_DAYS,
-      lastGameAt: games[0]?.playedAt ?? previous.analysis.lastGameAt,
-      guardrail: games.length >= 5 ? "focus-updated" : "focus-preserved-minimum-5-games",
+      lastGameAt: games[0]?.playedAt ?? null,
+      guardrail: "fresh-live-data-only",
     },
     profile,
     signals,
     exercises,
     program,
-    metrics: previous.metrics,
+    metrics: {
+      currentRating: profile.blitzRating,
+      importedGames: games.length,
+      analyzedGames: games.length,
+      positionsFlagged: errors.length,
+    },
   };
 }
 
@@ -441,7 +448,7 @@ function buildReport(snapshot) {
 }
 
 async function main() {
-  const previous = JSON.parse(await readFile(SNAPSHOT_PATH, "utf8"));
+  if (!USERNAME) throw new Error("CHESSCOACH_USERNAME est requis.");
   const games = await fetchRecentGames();
   if (!games.length) {
     console.log("Aucune nouvelle partie rapid/blitz dans la période.");
@@ -452,12 +459,16 @@ async function main() {
   try {
     await engine.start();
     const errors = await analyzeGames(engine, games);
-    const snapshot = buildSnapshot(previous, games, errors);
+    if (!errors.length) {
+      console.log("Aucune position critique détectée dans les parties analysées.");
+      return;
+    }
+    const snapshot = buildSnapshot(games, errors);
     const report = buildReport(snapshot);
     if (!DRY_RUN) {
-      await mkdir(dirname(SNAPSHOT_PATH), { recursive: true });
+      await mkdir(dirname(EXPORT_PATH), { recursive: true });
       await mkdir(dirname(REPORT_PATH), { recursive: true });
-      await writeFile(SNAPSHOT_PATH, JSON.stringify(snapshot, null, 2) + "\n", "utf8");
+      await writeFile(EXPORT_PATH, JSON.stringify(snapshot, null, 2) + "\n", "utf8");
       await writeFile(REPORT_PATH, report, "utf8");
     }
     console.log(JSON.stringify({

@@ -1,5 +1,5 @@
 import Dexie, { type EntityTable } from "dexie";
-import type { Attempt, Exercise, Game, TrainingPlan } from "./types";
+import type { Attempt, Exercise, Game, PlayerProfile, TrainingPlan } from "./types";
 
 type Setting = { key: string; value: string };
 
@@ -74,6 +74,20 @@ export async function saveTrainingPlan(plan: TrainingPlan) {
 
 export async function listTrainingPlans() {
   return offlineDb.plans.orderBy("date").reverse().toArray();
+}
+
+export async function cacheProfile(profile: PlayerProfile) {
+  await offlineDb.settings.put({ key: "player-profile", value: JSON.stringify(profile) });
+}
+
+export async function loadCachedProfile() {
+  const setting = await offlineDb.settings.get("player-profile");
+  if (!setting) return undefined;
+  try {
+    return JSON.parse(setting.value) as PlayerProfile;
+  } catch {
+    return undefined;
+  }
 }
 
 export async function unsyncedAttempts() {

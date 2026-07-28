@@ -3,7 +3,7 @@ import { getChatGPTUser } from "../../chatgpt-auth";
 import { getDb } from "../../../db";
 import { profiles } from "../../../db/schema";
 
-const fallback = { chessComUsername: "vincentito", displayName: "Vincent", targetRating: 1500, dailyMinutes: 20 };
+const fallback = { chessComUsername: "", displayName: "Joueur", blitzRating: 0, blitzPeak: 0, targetRating: 1500, dailyMinutes: 20 };
 
 export async function GET() {
   try {

@@ -1,7 +1,7 @@
 import { desc, eq } from "drizzle-orm";
 import { getChatGPTUser } from "../../chatgpt-auth";
 import { getDb } from "../../../db";
-import { attempts, exercises, games, trainingPlans } from "../../../db/schema";
+import { attempts, exercises, games, profiles, trainingPlans } from "../../../db/schema";
 import type { Attempt, Exercise, Game, TrainingPlan } from "../../../lib/types";
 
 const localOwner = "local@chesscoach.app";
@@ -14,12 +14,14 @@ export async function GET() {
   try {
     const owner = await ownerEmail();
     const db = getDb();
-    const [gameRows, planRows, exerciseRows, attemptRows] = await Promise.all([
+    const [gameRows, planRows, exerciseRows, attemptRows, profileRows] = await Promise.all([
       db.select().from(games).where(eq(games.ownerEmail, owner)).orderBy(desc(games.playedAt)).limit(350),
       db.select().from(trainingPlans).where(eq(trainingPlans.ownerEmail, owner)).orderBy(desc(trainingPlans.date)).limit(30),
       db.select().from(exercises).where(eq(exercises.ownerEmail, owner)).orderBy(desc(exercises.dueAt)).limit(50),
       db.select().from(attempts).where(eq(attempts.ownerEmail, owner)).orderBy(desc(attempts.createdAt)).limit(500),
+      db.select().from(profiles).where(eq(profiles.email, owner)).limit(1),
     ]);
+    const profile = profileRows[0];
 
     const syncedGames: Game[] = gameRows.map((row) => ({
       id: row.id,
@@ -51,6 +53,14 @@ export async function GET() {
     }));
 
     return Response.json({
+      profile: profile ? {
+        chessComUsername: profile.chessComUsername,
+        displayName: profile.displayName,
+        blitzRating: profile.blitzRating,
+        blitzPeak: profile.blitzPeak,
+        targetRating: profile.targetRating,
+        dailyMinutes: profile.dailyMinutes,
+      } : null,
       games: syncedGames,
       plans: planRows.map((row) => row.plan as TrainingPlan),
       exercises: exerciseRows.map((row) => ({
@@ -89,6 +99,7 @@ export async function POST(request: Request) {
     const exerciseItems = (payload.exercises ?? []).slice(0, 50);
     const db = getDb();
     const now = new Date().toISOString();
+    const [profile] = await db.select().from(profiles).where(eq(profiles.email, owner)).limit(1);
 
     for (const game of gameItems) {
       await db.insert(games).values({
@@ -96,7 +107,7 @@ export async function POST(request: Request) {
         ownerEmail: owner,
         sourceId: game.sourceId,
         source: game.source,
-        username: game.source === "chesscoach" ? "chesscoach" : "vincentito",
+        username: game.source === "chesscoach" ? "chesscoach" : (profile?.chessComUsername ?? ""),
         playedAt: game.playedAt,
         timeClass: game.timeClass,
         playerColor: game.playerColor,

@@ -2,8 +2,10 @@ import { index, integer, real, sqliteTable, text } from "drizzle-orm/sqlite-core
 
 export const profiles = sqliteTable("profiles", {
   email: text("email").primaryKey(),
-  chessComUsername: text("chess_com_username").notNull().default("vincentito"),
-  displayName: text("display_name").notNull().default("Vincent"),
+  chessComUsername: text("chess_com_username").notNull().default(""),
+  displayName: text("display_name").notNull().default("Joueur"),
+  blitzRating: integer("blitz_rating").notNull().default(0),
+  blitzPeak: integer("blitz_peak").notNull().default(0),
   targetRating: integer("target_rating").notNull().default(1500),
   dailyMinutes: integer("daily_minutes").notNull().default(20),
   createdAt: text("created_at").notNull(),

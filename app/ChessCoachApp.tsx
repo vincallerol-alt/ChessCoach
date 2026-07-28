@@ -2,13 +2,13 @@
 
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { Chess } from "chess.js";
-import { AdaptiveCoachPlanner, defaultSignals, DeterministicCoachNarrator, nextReviewDate, weaknessPriority } from "../lib/coach";
-import { syncCloudState } from "../lib/cloud-sync";
+import { DeterministicCoachNarrator, nextReviewDate } from "../lib/coach";
+import { syncCloudState, type CloudProfile } from "../lib/cloud-sync";
 import { createLocalId } from "../lib/ids";
-import { cacheExercises, cacheGames, listAttempts, listCachedExercises, listCachedGames, listTrainingPlans, loadTrainingPlan, queueAttempt, saveTrainingPlan } from "../lib/offline-db";
+import { cacheExercises, cacheGames, cacheProfile, listAttempts, listCachedExercises, listCachedGames, listTrainingPlans, loadCachedProfile, queueAttempt, saveTrainingPlan } from "../lib/offline-db";
+import { buildTrainingProgram, createEmptyProfile, deriveProfile, deriveWeaknessSignals } from "../lib/runtime-coach";
 import { distinctExercises, preparePlan } from "../lib/training-plan";
 import type { Attempt, BotGameSummary, Exercise, Game, PlayerProfile, SkillArea, TrainingPlan, TrainingProgram, WeaknessSignal } from "../lib/types";
-import coachSnapshot from "../data/coach-snapshot.json";
 import { ChessBoardPanel } from "./components/ChessBoardPanel";
 import { CoachLivePanel } from "./components/CoachLivePanel";
 
@@ -19,21 +19,10 @@ type BeforeInstallPromptEvent = Event & {
   userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
 };
 
-const profile = coachSnapshot.profile as PlayerProfile;
-const weeklySignals = coachSnapshot.signals as WeaknessSignal[];
-const fallbackPlan = new AdaptiveCoachPlanner().buildDailyPlan(
-  profile,
-  weeklySignals.length ? weeklySignals : defaultSignals,
-  new Date(),
-);
-const trainingProgram = coachSnapshot.program as TrainingProgram;
-const snapshotExercises = coachSnapshot.exercises as Exercise[];
 const todayIso = new Date().toISOString().slice(0, 10);
-const rawInitialPlan = trainingProgram.sessions.find((session) => session.date === todayIso)
-  ?? trainingProgram.sessions[0]
-  ?? fallbackPlan;
-
-const initialPlan = preparePlan(rawInitialPlan, snapshotExercises);
+const emptyProfile = createEmptyProfile();
+const emptyProgram = buildTrainingProgram(emptyProfile, [], [], 0);
+const initialPlan = emptyProgram.sessions[0];
 const narrator = new DeterministicCoachNarrator();
 const skillLabels: Record<SkillArea, string> = {
   openings: "Ouvertures",
@@ -43,18 +32,19 @@ const skillLabels: Record<SkillArea, string> = {
   time: "Gestion du temps",
 };
 
-function signalsWithAttempts(signals: WeaknessSignal[], attempts: Attempt[], exercises: Exercise[]) {
-  const areaByExercise = new Map(exercises.map((exercise) => [exercise.id, exercise.area]));
-  return signals.map((signal) => {
-    const areaAttempts = attempts.filter((attempt) => areaByExercise.get(attempt.exerciseId) === signal.area);
-    if (!areaAttempts.length) return signal;
-    const failedAttempts = areaAttempts.filter((attempt) => !attempt.correct).length / areaAttempts.length;
-    const updated = { ...signal, failedAttempts };
-    return { ...updated, priority: weaknessPriority(updated) };
-  }).sort((left, right) => right.priority - left.priority);
-}
-
 const elapsedSince = (startedAt: number) => Date.now() - startedAt;
+
+function mergeCloudProfile(current: PlayerProfile, persisted: CloudProfile): PlayerProfile {
+  return {
+    ...current,
+    chessComUsername: persisted.chessComUsername || current.chessComUsername,
+    displayName: persisted.displayName || current.displayName,
+    blitzRating: persisted.blitzRating > 0 ? persisted.blitzRating : current.blitzRating,
+    blitzPeak: Math.max(current.blitzPeak, persisted.blitzPeak, persisted.blitzRating),
+    targetRating: persisted.targetRating || current.targetRating,
+    dailyMinutes: persisted.dailyMinutes || current.dailyMinutes,
+  };
+}
 
 const navigation: Array<{ id: Tab; label: string; icon: string }> = [
   { id: "today", label: "Aujourd’hui", icon: "⌂" },
@@ -120,7 +110,7 @@ function TodayView({
 
       <section className="dashboard-grid">
         <article className="panel session-panel">
-          <div className="panel-heading"><div><span className="eyebrow">Programme adaptatif</span><h2>Votre parcours aujourd’hui</h2></div><span className="duration-pill">20 min</span></div>
+          <div className="panel-heading"><div><span className="eyebrow">Programme adaptatif</span><h2>Votre parcours aujourd’hui</h2></div><span className="duration-pill">{plan.durationMinutes} min</span></div>
           <div className="steps-list">
             {plan.steps.map((step, index) => (
               <button className={`step-row ${step.completed ? "done" : ""} ${index === completed ? "active" : ""}`} key={step.id} type="button" onClick={() => onStart(step.id)}>
@@ -527,10 +517,19 @@ function PlayView({ focus, onGameComplete }: { focus: SkillArea; onGameComplete:
   );
 }
 
-function GamesView({ onGamesChange }: { onGamesChange: (games: Game[]) => void }) {
+function GamesView({
+  profile,
+  onGamesChange,
+  onProfileChange,
+}: {
+  profile: PlayerProfile;
+  onGamesChange: (games: Game[]) => void;
+  onProfileChange: (profile: CloudProfile) => void;
+}) {
   const [games, setGames] = useState<Game[]>([]);
   const [visibleCount, setVisibleCount] = useState(12);
   const [syncing, setSyncing] = useState(false);
+  const [username, setUsername] = useState(profile.chessComUsername);
   const [message, setMessage] = useState("Chargement de votre historique réel…");
   useEffect(() => {
     listCachedGames().then((items) => {
@@ -543,14 +542,29 @@ function GamesView({ onGamesChange }: { onGamesChange: (games: Game[]) => void }
     setSyncing(true);
     setMessage("Import incrémental depuis Chess.com…");
     try {
-      const response = await fetch("/api/chesscom/import", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ username: profile.chessComUsername, limit: 300 }) });
+      const response = await fetch("/api/chesscom/import", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ username, limit: 300 }) });
       if (!response.ok) throw new Error("sync");
-      const data = await response.json() as { games: Game[]; imported: number };
+      const data = await response.json() as {
+        games: Game[];
+        imported: number;
+        cloudPersisted: boolean;
+        profile?: CloudProfile;
+      };
       await cacheGames(data.games);
-      const items = await listCachedGames();
+      if (data.profile) onProfileChange(data.profile);
+      let items = await listCachedGames();
+      let cloudPersisted = data.cloudPersisted;
+      try {
+        const cloudState = await syncCloudState();
+        items = cloudState.games;
+        cloudPersisted = true;
+        if (cloudState.profile) onProfileChange(cloudState.profile);
+      } catch {
+        cloudPersisted = false;
+      }
       setGames(items);
       onGamesChange(items);
-      setMessage(`${items.length} parties importées · ${items.filter((game) => game.analyzed).length} réellement analysées`);
+      setMessage(`${items.length} parties importées · ${items.filter((game) => game.analyzed).length} réellement analysées · ${cloudPersisted ? "enregistrées dans le cloud" : "enregistrées sur cet appareil seulement"}`);
     } catch {
       setMessage("Hors ligne : vos parties en cache restent accessibles.");
     } finally {
@@ -582,7 +596,7 @@ function GamesView({ onGamesChange }: { onGamesChange: (games: Game[]) => void }
   };
   return (
     <div className="view-stack">
-      <section className="page-title"><div><span className="eyebrow">Bibliothèque personnelle</span><h1>Vos parties</h1><p>{message}</p></div><div className="page-actions"><label className="secondary-button">Importer un PGN<input type="file" accept=".pgn,application/x-chess-pgn" onChange={importPgn} hidden /></label><button className="primary-button" type="button" onClick={sync} disabled={syncing}>{syncing ? "Synchronisation…" : "Synchroniser Chess.com"}</button></div></section>
+      <section className="page-title"><div><span className="eyebrow">Bibliothèque personnelle</span><h1>Vos parties</h1><p>{message}</p></div><div className="page-actions"><input aria-label="Pseudo Chess.com" value={username} onChange={(event) => setUsername(event.target.value)} placeholder="Pseudo Chess.com" /><label className="secondary-button">Importer un PGN<input type="file" accept=".pgn,application/x-chess-pgn" onChange={importPgn} hidden /></label><button className="primary-button" type="button" onClick={sync} disabled={syncing || username.trim().length < 2}>{syncing ? "Synchronisation…" : "Synchroniser Chess.com"}</button></div></section>
       <section className="panel games-table">
         <div className="table-head"><span>Partie</span><span>Cadence</span><span>Résultat</span><span>Analyse</span></div>
         {games.length === 0 && <p className="empty-state">Aucune partie enregistrée. Jouez contre Stockfish ou synchronisez Chess.com.</p>}
@@ -633,36 +647,75 @@ export function ChessCoachApp() {
   const [tab, setTab] = useState<Tab>("today");
   const online = useSyncExternalStore(subscribeNetwork, () => navigator.onLine, () => true);
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
+  const [storedProfile, setStoredProfile] = useState<PlayerProfile>(emptyProfile);
   const [activePlan, setActivePlan] = useState<TrainingPlan>(initialPlan);
   const [selectedStepId, setSelectedStepId] = useState(initialPlan.steps[0]?.id ?? "");
   const [sessionHistory, setSessionHistory] = useState<TrainingPlan[]>([]);
-  const [exerciseLibrary, setExerciseLibrary] = useState<Exercise[]>(snapshotExercises);
+  const [exerciseLibrary, setExerciseLibrary] = useState<Exercise[]>([]);
   const [attemptHistory, setAttemptHistory] = useState<Attempt[]>([]);
   const [cachedGames, setCachedGames] = useState<Game[]>([]);
   const [cloudSynced, setCloudSynced] = useState(false);
-  const [runtimeSignals, setRuntimeSignals] = useState<WeaknessSignal[]>(weeklySignals);
+  const runtimeSignals = useMemo(
+    () => deriveWeaknessSignals(cachedGames, attemptHistory, exerciseLibrary),
+    [attemptHistory, cachedGames, exerciseLibrary],
+  );
+  const profile = useMemo(
+    () => deriveProfile(storedProfile, cachedGames, runtimeSignals),
+    [cachedGames, runtimeSignals, storedProfile],
+  );
+  const trainingProgram = useMemo(
+    () => buildTrainingProgram(
+      profile,
+      runtimeSignals,
+      exerciseLibrary,
+      cachedGames.filter((game) => game.analyzed).length,
+      new Date(),
+      sessionHistory,
+    ),
+    [cachedGames, exerciseLibrary, profile, runtimeSignals, sessionHistory],
+  );
+
+  useEffect(() => {
+    void cacheProfile(profile);
+  }, [profile]);
+
+  useEffect(() => {
+    const todayPlan = trainingProgram.sessions.find((plan) => plan.date === todayIso) ?? trainingProgram.sessions[0];
+    if (!todayPlan) return;
+    Promise.resolve().then(() => {
+      setActivePlan((current) => current.id === todayPlan.id ? current : todayPlan);
+      setSelectedStepId((current) => current || (todayPlan.steps.find((step) => !step.completed)?.id ?? todayPlan.steps[0]?.id ?? ""));
+    });
+  }, [trainingProgram]);
 
   useEffect(() => {
     let cancelled = false;
     Promise.all([
-      loadTrainingPlan(activePlan.id),
       listTrainingPlans(),
       listCachedExercises(),
       listAttempts(),
       listCachedGames(),
-    ]).then(async ([saved, plans, exercises, attempts, games]) => {
+      loadCachedProfile(),
+    ]).then(async ([plans, exercises, attempts, games, savedProfile]) => {
       if (cancelled) return;
-      const merged = distinctExercises([...exercises, ...snapshotExercises]);
-      const normalizedPlans = plans.map((plan) => preparePlan(plan, merged));
+      const merged = distinctExercises(exercises);
+      const signals = deriveWeaknessSignals(games, attempts, merged);
+      const dynamicProfile = deriveProfile(savedProfile ?? emptyProfile, games, signals);
+      const program = buildTrainingProgram(dynamicProfile, signals, merged, games.filter((game) => game.analyzed).length, new Date(), plans);
+      const normalizedPlans = program.sessions;
       await Promise.all(normalizedPlans.map((plan) => saveTrainingPlan(plan)));
+      await cacheProfile(dynamicProfile);
       setExerciseLibrary(merged);
       setSessionHistory(normalizedPlans);
       setAttemptHistory(attempts);
       setCachedGames(games);
-      setActivePlan((current) => preparePlan(saved ?? current, merged));
+      setStoredProfile(dynamicProfile);
+      const todayPlan = program.sessions.find((plan) => plan.date === todayIso) ?? program.sessions[0];
+      setActivePlan(todayPlan);
+      setSelectedStepId(todayPlan.steps.find((step) => !step.completed)?.id ?? todayPlan.steps[0]?.id ?? "");
     }).catch(() => undefined);
     return () => { cancelled = true; };
-  }, [activePlan.id]);
+  }, []);
 
   useEffect(() => {
     if (!online) return;
@@ -672,22 +725,29 @@ export function ChessCoachApp() {
       setCloudSynced(true);
       setCachedGames(state.games);
       setAttemptHistory(state.attempts);
-      const mergedExercises = distinctExercises([...state.exercises, ...snapshotExercises]);
-      const normalizedPlans = state.plans.map((plan) => preparePlan(plan, mergedExercises));
+      const mergedExercises = distinctExercises(state.exercises);
+      const signals = deriveWeaknessSignals(state.games, state.attempts, mergedExercises);
+      const cachedProfile = await loadCachedProfile();
+      const cloudProfile = state.profile ? mergeCloudProfile(cachedProfile ?? emptyProfile, state.profile) : (cachedProfile ?? emptyProfile);
+      const dynamicProfile = deriveProfile(cloudProfile, state.games, signals);
+      const program = buildTrainingProgram(dynamicProfile, signals, mergedExercises, state.games.filter((game) => game.analyzed).length, new Date(), state.plans);
+      const normalizedPlans = program.sessions;
       await Promise.all(normalizedPlans.map((plan) => saveTrainingPlan(plan)));
+      await cacheProfile(dynamicProfile);
       setSessionHistory(normalizedPlans);
       setExerciseLibrary(mergedExercises);
-      setRuntimeSignals(signalsWithAttempts(weeklySignals, state.attempts, mergedExercises));
-      const syncedPlan = normalizedPlans.find((plan) => plan.id === activePlan.id);
-      if (syncedPlan) setActivePlan(syncedPlan);
-      if (state.plans.some((plan) => plan.contentVersion !== 2)) {
-        void syncCloudState().catch(() => undefined);
+      setStoredProfile(dynamicProfile);
+      const syncedPlan = normalizedPlans.find((plan) => plan.date === todayIso)
+        ?? normalizedPlans[0];
+      if (syncedPlan) {
+        setActivePlan(syncedPlan);
+        setSelectedStepId(syncedPlan.steps.find((step) => !step.completed)?.id ?? syncedPlan.steps[0]?.id ?? "");
       }
     }).catch(() => {
       if (!cancelled) setCloudSynced(false);
     });
     return () => { cancelled = true; };
-  }, [activePlan.id, online]);
+  }, [online]);
 
   useEffect(() => {
     const installHandler = (event: Event) => { event.preventDefault(); setInstallPrompt(event as BeforeInstallPromptEvent); };
@@ -778,20 +838,6 @@ export function ChessCoachApp() {
       setActivePlan(adaptedPlan);
       await saveTrainingPlan(adaptedPlan);
       setSessionHistory(await listTrainingPlans());
-      setRuntimeSignals((current) => {
-        const next = current.map((signal) => {
-          if (signal.area !== critical.area) return signal;
-          const updated = {
-            ...signal,
-            recurrence: Math.min(1, signal.recurrence + 0.08),
-            evaluationLoss: Math.max(signal.evaluationLoss, Math.min(1, critical.centipawnLoss / 300)),
-            recency: 1,
-            timePressure: critical.area === "time" ? Math.min(1, signal.timePressure + 0.15) : signal.timePressure,
-          };
-          return { ...updated, priority: weaknessPriority(updated) };
-        });
-        return next.sort((left, right) => right.priority - left.priority);
-      });
     }
     if (online) syncCloudState().then(() => setCloudSynced(true)).catch(() => setCloudSynced(false));
   };
@@ -843,18 +889,14 @@ export function ChessCoachApp() {
                 await cacheExercises([updatedExercise]);
                 setExerciseLibrary((current) => current.map((exercise) => exercise.id === updatedExercise.id ? updatedExercise : exercise));
                 setAttemptHistory(await listAttempts());
-                setRuntimeSignals((current) => current.map((signal) => {
-                  if (signal.area !== updatedExercise.area) return signal;
-                  const updated = {
-                    ...signal,
-                    failedAttempts: Math.min(1, Math.max(0, signal.failedAttempts + (correct ? -0.04 : 0.08))),
-                  };
-                  return { ...updated, priority: weaknessPriority(updated) };
-                }).sort((left, right) => right.priority - left.priority));
               }}
             />
           )}
-          {tab === "games" && <GamesView onGamesChange={setCachedGames} />}
+          {tab === "games" && <GamesView key={profile.chessComUsername} profile={profile} onGamesChange={setCachedGames} onProfileChange={(persisted) => setStoredProfile((current) => {
+            const next = mergeCloudProfile(current, persisted);
+            void cacheProfile(next);
+            return next;
+          })} />}
           {tab === "progress" && <ProgressView profile={profile} attempts={attemptHistory} games={cachedGames} signals={runtimeSignals} />}
         </div>
       </main>
