@@ -4,12 +4,15 @@
 
 - Échiquier bord à bord sur les écrans de moins de 680 px.
 - Progression de séance tactile et défilable au-dessus de l’échiquier.
+- Programme 14 jours présenté en carrousel tactile contenu dans la largeur de l’écran.
 - Pendules, cadence et force accessibles sous le pouce.
 - Historique compact des huit derniers demi-coups.
 - Zones sûres Android/iOS via `env(safe-area-inset-*)`.
 - Feedback d’exercice maintenu visible au-dessus de la navigation.
 - Coach IA accessible par une bulle flottante au-dessus de la navigation ; le panneau regroupe texte, voix et suggestions rapides.
 - Après une erreur, la bulle ouvre automatiquement l’explication contextualisée sans masquer durablement l’échiquier.
+- Historique des parties converti en lignes mobiles : partie en tête, puis cadence, résultat et statut d’analyse sur trois colonnes.
+- Aucun composant ne provoque de défilement horizontal global de la page.
 - Les étapes replay, révision et série utilisent des positions distinctes.
 - Une série tactique enchaîne plusieurs positions sans retour au menu.
 - Une étape reste incomplète si aucune position n’est disponible.

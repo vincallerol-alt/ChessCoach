@@ -413,7 +413,8 @@ function TrainingView({
           <div><span className="eyebrow">{availableGameCount} parties importées · {analyzedGameCount} analysées</span><h2>Programme des 14 jours</h2></div>
           <span className="duration-pill">{program.startDate} → {program.endDate}</span>
         </div>
-        <div className="program-grid">
+        <small className="carousel-hint">Faites glisser pour parcourir les 14 jours</small>
+        <div className="program-grid" role="region" aria-label="Programme d’entraînement sur 14 jours">
           {program.sessions.map((session, index) => {
             const preparedSession = preparePlan(session, exercises);
             const saved = history.find((item) => item.id === session.id);
